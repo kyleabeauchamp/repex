@@ -9,7 +9,7 @@ import datetime
 import numpy as np
 import numpy.linalg
 
-import simtk.openmm 
+import simtk.openmm as mm
 import simtk.unit as units
 
 import netCDF4 as netcdf # netcdf4-python is used in place of scipy.io.netcdf for now
@@ -97,7 +97,7 @@ class ReplicaExchange(object):
     # Options to store.
     options_to_store = ['collision_rate', 'constraint_tolerance', 'timestep', 'nsteps_per_iteration', 'number_of_iterations', 'equilibration_timestep', 'number_of_equilibration_iterations', 'title', 'minimize', 'replica_mixing_scheme', 'online_analysis', 'verbose', 'show_mixing_statistics']
 
-    def __init__(self, states=None, coordinates=None, store_filename=None, protocol=None, mm=None, mpicomm=None, metadata=None):
+    def __init__(self, states, coordinates, database, protocol=None, mpicomm=None, metadata=None):
         """
         Initialize replica-exchange simulation facility.
 
@@ -130,10 +130,6 @@ class ReplicaExchange(object):
 
         # To allow for parameters to be modified after object creation, class is not initialized until a call to self._initialize().
         self._initialized = False
-
-        # Select default OpenMM implementation if not specified.
-        self.mm = mm
-        if mm is None: self.mm = simtk.openmm
 
         # Set MPI communicator (or None if not used).
         self.mpicomm = mpicomm
@@ -188,7 +184,7 @@ class ReplicaExchange(object):
             self.states = states
             
         if (not states_restored) and (states is None):
-            raise ParameterError("Could not restore thermodynamic states from store file, and no states specified.")
+            raise ValueError("Could not restore thermodynamic states from store file, and no states specified.")
 
         # Determine number of replicas from the number of specified thermodynamic states.
         self.nreplicas = len(self.states)
@@ -196,7 +192,7 @@ class ReplicaExchange(object):
         # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
         for state in self.states:
             if not state.is_compatible_with(self.states[0]):
-                raise ParameterError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
+                raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
 
         if not self.resume:
             # Distribute coordinate information to replicas in a round-robin fashion.
@@ -218,8 +214,6 @@ class ReplicaExchange(object):
 
         # Store metadata to store in store file.
         self.metadata = metadata
-
-        return
 
     def __repr__(self):
         """
@@ -1072,8 +1066,10 @@ class ReplicaExchange(object):
         Nij = np.zeros([self.nstates,self.nstates], np.float64)
         for iteration in range(self.iteration - 1):
             for ireplica in range(self.nstates):
-                istate = self.ncfile.variables['states'][iteration,ireplica]
-                jstate = self.ncfile.variables['states'][iteration+1,ireplica]
+                #istate = self.ncfile.variables['states'][iteration,ireplica]
+                istate = self.database.states[iteration,ireplica]
+                #jstate = self.ncfile.variables['states'][iteration+1,ireplica]
+                jstate = self.database.states[iteration+1,ireplica]
                 Nij[istate,jstate] += 0.5
                 Nij[jstate,istate] += 0.5
         Tij = np.zeros([self.nstates,self.nstates], np.float64)

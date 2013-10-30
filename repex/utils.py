@@ -65,3 +65,7 @@ def generate_maxwell_boltzmann_velocities(system, temperature):
     
     return velocities
 
+
+
+def time_and_print(x):
+    return x
