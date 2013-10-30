@@ -36,4 +36,7 @@ states = [ ThermodynamicState(system=system, temperature=T_i[i]) for i in range(
 
 coordinates = [model.getPositions()] * n_replicas
 
-database = repex.netcdf_io.NetCDFDatabase(nc_filename, states, coordinates)
+#database = repex.netcdf_io.NetCDFDatabase(nc_filename, states, coordinates)
+
+replica_exchange = ReplicaExchange(states, coordinates, nc_filename)
+replica_exchange.run()

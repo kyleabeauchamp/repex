@@ -16,7 +16,7 @@ import simtk.unit as units
 import netCDF4 as netcdf
 
 from thermodynamics import ThermodynamicState
-from utils import time_and_print
+from utils import time_and_print, process_kwargs, fix_coordinates
 from constants import kB
 
 import logging
@@ -24,51 +24,26 @@ logger = logging.getLogger(__name__)
 
 __version__ = 0.0
 
-def fix_coordinates(coordinates):
-    if type(coordinates) in [type(list()), type(set())]:
-        return [ units.Quantity(np.array(coordinate_set / coordinate_set.unit), coordinate_set.unit) for coordinate_set in coordinates ] 
-    else:
-        return [ units.Quantity(np.array(coordinates / coordinates.unit), coordinates.unit) ]            
-
-
-default_options = {}
-default_options["collision_rate"] = 91.0 / units.picosecond 
-default_options["constraint_tolerance"] = 1.0e-6 
-default_options["timestep"] = 2.0 * units.femtosecond
-default_options["nsteps_per_iteration"] = 500
-default_options["number_of_iterations"] = 1
-default_options["equilibration_timestep"] = 1.0 * units.femtosecond
-default_options["number_of_equilibration_iterations"] = 1
-default_options["title"] = 'Replica-exchange simulation created using ReplicaExchange class of repex.py on %s' % time.asctime(time.localtime())        
-default_options["minimize"] = True 
-default_options["minimize_tolerance"] = 1.0 * units.kilojoules_per_mole / units.nanometers # if specified, set minimization tolerance
-default_options["minimize_maxIterations"] = 0 # if nonzero, set maximum iterations
-default_options["platform"] = None
-default_options["replica_mixing_scheme"] = 'swap-all' # mix all replicas thoroughly
-default_options["online_analysis"] = False # if True, analysis will occur each iteration
-default_options["show_energies"] = True
-default_options["show_mixing_statistics"] = True
-
-
 class NetCDFDatabase(object):
     options_to_store = ['collision_rate', 'constraint_tolerance', 'timestep', 'nsteps_per_iteration', 'number_of_iterations', 'equilibration_timestep', 'number_of_equilibration_iterations', 'title', 'minimize', 'replica_mixing_scheme', 'online_analysis', 'show_mixing_statistics']
 
-    def __init__(self, filename, states=None, initial_coordinates=None, options=default_options):
+    def __init__(self, filename, states=None, coordinates=None, **kwargs):
 
         # Check if netcdf file exists.
-        resume = os.path.exists(filename) and (os.path.getsize(filename) > 0)
+        self.resume = os.path.exists(filename) and (os.path.getsize(filename) > 0)
         
         self.ncfile = netcdf.Dataset(filename, 'w', version='NETCDF4')
         self.title = "No Title."
         
-        if resume: 
+        if self.resume: 
             logger.info("Attempting to resume by reading thermodynamic states and options...")
-            self.states = self._load_thermodynamic_states()
-            self.options = self._load_options()
+            self.states = self.load_thermodynamic_states()
+            self.options = self.load_options()
+            self.check_self_consistency(states, coordinates, options)
         else:
             self.states = states
-            self.options = options
-            self.initial_coordinates = initial_coordinates
+            self.options = process_kwargs(kwargs)
+            self.coordinates = coordinates
             self._initialize_netcdf()
 
         # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
@@ -76,9 +51,12 @@ class NetCDFDatabase(object):
             if not state.is_compatible_with(self.states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
 
-        if not resume:
-            self.initial_coordinates = fix_coordinates(initial_coordinates)
-                    
+        if not self.resume:
+            self.coordinates = fix_coordinates(coordinates)
+
+    def check_self_consistency(self, states, coordinates, options):
+        """Raises a ValueError is input and loaded data disagree."""
+        pass
 
     def _initialize_netcdf(self):
         """
@@ -87,9 +65,9 @@ class NetCDFDatabase(object):
         """
         
         self.n_replicas = len(self.states)
-        self.n_atoms = len(self.initial_coordinates[0])
+        self.n_atoms = len(self.coordinates[0])
         self.n_states = len(self.states)
-        assert self.n_replicas == len(self.initial_coordinates), "Error: inconsistent number of replicas."
+        assert self.n_replicas == len(self.coordinates), "Error: inconsistent number of replicas."
         
         # Create dimensions.
         self.ncfile.createDimension('iteration', 0) # unlimited number of iterations
@@ -234,7 +212,7 @@ class NetCDFDatabase(object):
             ncvar_serialized_states[state_index] = serialized
 
 
-    def _load_thermodynamic_states(self):
+    def load_thermodynamic_states(self):
         """
         Restore the thermodynamic states from a NetCDF file.
 
@@ -312,7 +290,7 @@ class NetCDFDatabase(object):
             if option_unit: setattr(ncvar, 'units', str(option_unit))
             setattr(ncvar, 'type', option_type.__name__) 
 
-    def _load_options(self):
+    def load_options(self):
         """Return a dictionary of options from a loaded NetCDF file.
         """
         
@@ -387,3 +365,21 @@ class NetCDFDatabase(object):
         iteration += 1
         
         return replica_coordinates, replica_box_vectors, u_kl, iteration
+
+
+    def output_iteration(self, **kwargs):
+        """To do: use mdtraj.utils.ensure_type to ensure correct shapes and dtypes!"""
+        
+        required_keys = ["iteration", "coordinates", "box_vectors", "volumes", "replica_states", "energies", "proposed", "accepted", "time"]
+        assert set(required_keys) == set(kwargs.keys()), "Wrong keys provided to output_iteration!"
+
+        self.ncfile.variables["positions"][iteration] = kwargs["coordinates"]
+        self.ncfile.variables['box_vectors'][iteration] = kwargs["box_vectors"]
+        self.ncfile.variables['volumes'][iteration] = kwargs["volumes"]    
+        self.ncfile.variables['states'][iteration] = kwargs["replica_states"]
+        self.ncfile.variables['energies'][iteration] = kwargs["u_kl"]
+        self.ncfile.variables['proposed'][iteration] = kwargs["Nij_proposed"]
+        self.ncfile.variables['accepted'][iteration] = kwargs["Nij_accepted"]
+        self.ncfile.variables['timestamp'][iteration] = kwargs["time"]
+
+        self.ncfile.sync()

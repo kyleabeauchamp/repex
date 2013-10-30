@@ -31,7 +31,8 @@ COPYRIGHT
 
 import copy
 import math
-import numpy
+import numpy as np
+import numpy.linalg
 
 import simtk.openmm 
 import simtk.unit as units
@@ -371,7 +372,7 @@ class ThermodynamicState(object):
 
         # Allocate storage.
         K = len(coordinates_list)
-        u_k = numpy.zeros([K], numpy.float64)
+        u_k = np.zeros([K], np.float64)
 
         # Compute energies.
         for k in range(K):
@@ -496,8 +497,8 @@ class ThermodynamicState(object):
 
         # Compute volume of parallelepiped.
         [a,b,c] = box_vectors
-        A = numpy.array([a/a.unit, b/a.unit, c/a.unit])
-        volume = numpy.linalg.det(A) * a.unit**3
+        A = np.array([a/a.unit, b/a.unit, c/a.unit])
+        volume = np.linalg.det(A) * a.unit**3
         return volume
 
 #=============================================================================================
