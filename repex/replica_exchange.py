@@ -6,6 +6,7 @@ import datetime
 
 import numpy as np
 import numpy.linalg
+import pandas as pd
 
 import simtk.openmm as mm
 import simtk.unit as units
@@ -747,30 +748,16 @@ class ReplicaExchange(object):
             Tij[istate,:] = Nij[istate,:] / Nij[istate,:].sum()
 
         if self.show_mixing_statistics:
-            # Print observed transition probabilities.
-            PRINT_CUTOFF = 0.001 # Cutoff for displaying fraction of accepted swaps.
-            print "Cumulative symmetrized state mixing transition matrix:"
-            print "%6s" % "",
-            for jstate in range(self.n_states):
-                print "%6d" % jstate,
-            print ""
-            for istate in range(self.n_states):
-                print "%-6d" % istate,
-                for jstate in range(self.n_states):
-                    P = Tij[istate,jstate]
-                    if (P >= PRINT_CUTOFF):
-                        print "%6.3f" % P,
-                    else:
-                        print "%6s" % "",
-                print ""
+            P = pd.DataFrame(Tij)
+            logger.info("\nCumulative symmetrized state mixing transition matrix:\n%s" % P.to_string())
 
         # Estimate second eigenvalue and equilibration time.
         mu = np.linalg.eigvals(Tij)
         mu = -np.sort(-mu) # sort in descending order
         if (mu[1] >= 1):
-            print "Perron eigenvalue is unity; Markov chain is decomposable."
+            logger.info("\nPerron eigenvalue is unity; Markov chain is decomposable.")
         else:
-            print "Perron eigenvalue is %9.5f; state equilibration timescale is ~ %.1f iterations" % (mu[1], 1.0 / (1.0 - mu[1]))
+            logger.info("\nPerron eigenvalue is %9.5f; state equilibration timescale is ~ %.1f iterations" % (mu[1], 1.0 / (1.0 - mu[1])))
 
         # Show time consumption statistics.
         final_time = time.time()
@@ -834,27 +821,11 @@ class ReplicaExchange(object):
     def _show_energies(self):
         """Show energies (in units of kT) for all replicas at all states.
         """
-
-        # Only root node can print.
         if self.mpicomm and (self.mpicomm.rank != 0):
             return
 
-        # print header
-        print "%-24s %16s" % ("reduced potential (kT)", "current state"),
-        for state_index in range(self.n_states):
-            print " state %3d" % state_index,
-        print ""
-
-        # print energies in kT
-        for replica_index in range(self.n_states):
-            print "replica %-16d %16d" % (replica_index, self.replica_states[replica_index]),
-            for state_index in range(self.n_states):
-                u = self.u_kl[replica_index,state_index]
-                if (u > 1e6):
-                    print "%10.3e" % u,
-                else:
-                    print "%10.1f" % u,
-            print ""
+        U = pd.DataFrame(self.u_kl)
+        logger.info("\n%-24s %16s\n%s" % ("reduced potential (kT)", "current state", U.to_string()))
 
     @classmethod
     def create_repex(cls, thermodynamic_states, coordinates, filename, mpicomm=None, **kwargs):

@@ -8,7 +8,7 @@ from repex.replica_exchange import ReplicaExchange
 import repex.netcdf_io
 import logging
 
-logging.basicConfig(level=0)
+logging.basicConfig(level=0, format="%(message)s")
 
 nc_filename = "./out.nc"
 

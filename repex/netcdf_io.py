@@ -62,11 +62,8 @@ class NetCDFDatabase(object):
         logger.info("Attempting to resume by reading thermodynamic states and options...")
         self.thermodynamic_states = self.load_thermodynamic_states()
         self.options = self.load_options()
-        self.coordinates = self.load_starting_coordinates()
-        self.iteration = self.ncfile.variables["positions"].shape[0]
-
-    def load_starting_coordinates(self):
-        return self.ncfile.variables["positions"][-1]
+        
+        self.coordinates, self.replica_box_vectors, self.u_kl, self.iteration = self._resume_from_netcdf()
 
     def _initialize_netcdf(self):
         """
@@ -339,9 +336,7 @@ class NetCDFDatabase(object):
         return options
 
     def _resume_from_netcdf(self):
-        """Resume execution by reading current positions and energies from a NetCDF file.
-        
-        """
+        """Resume execution by reading current positions and energies from a NetCDF file."""
 
         # TODO: Perform sanity check on file before resuming
 
@@ -398,7 +393,7 @@ class NetCDFDatabase(object):
 
     @property
     def proposed(self):
-        """Proposed moves
+        """Return proposed moves
         """
         return self.ncfile.variables['proposed'][:]
         
@@ -409,7 +404,7 @@ class NetCDFDatabase(object):
 
     @property
     def states(self):
-        """Return accepted moves"""
+        """Return state indices"""
         return self.ncfile.variables['states'][:]
 
     
