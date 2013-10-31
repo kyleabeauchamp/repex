@@ -31,8 +31,11 @@ class NetCDFDatabase(object):
         resume = os.path.exists(filename) and (os.path.getsize(filename) > 0)
         
         if resume:
+            assert states is None and coordinates is None, "Cannot input states and coordinates if you are resuming from disk."
             self.ncfile = netcdf.Dataset(filename, 'a', version='NETCDF4')
         else:
+            assert states is not None and coordinates is not None, "Must input states and coordinates if no existing database."
+            assert len(states) == len(coordinates), "Must have same number of states and coordinate sets."
             self.ncfile = netcdf.Dataset(filename, 'w', version='NETCDF4')
         
         self.title = "No Title."

@@ -24,14 +24,14 @@ class ReplicaExchange(object):
     """
     """    
 
-    def __init__(self, states, coordinates, database=None, **kwargs):
+    def __init__(self, states, coordinates, database=None, mpicomm=None, **kwargs):
         """
         """
 
         # To allow for parameters to be modified after object creation, class is not initialized until a call to self._initialize().
         self._initialized = False
         
-        self.mpicomm = None
+        self.mpicomm = mpicomm
 
         options = process_kwargs(kwargs)
         
@@ -720,9 +720,7 @@ class ReplicaExchange(object):
         Nij = np.zeros([self.n_states,self.n_states], np.float64)
         for iteration in range(self.iteration - 1):
             for ireplica in range(self.n_states):
-                #istate = self.ncfile.variables['states'][iteration,ireplica]
                 istate = self.database.states[iteration, ireplica]
-                #jstate = self.ncfile.variables['states'][iteration+1,ireplica]
                 jstate = self.database.states[iteration + 1, ireplica]
                 Nij[istate,jstate] += 0.5
                 Nij[jstate,istate] += 0.5
@@ -846,7 +844,7 @@ class ReplicaExchange(object):
         else:
             database = None
         
-        repex = cls(thermodynamic_states, coordinates, database, **kwargs)
+        repex = cls(thermodynamic_states, coordinates, database, mpicomm=mpicomm, **kwargs)
         repex._initialize()
         repex._run_iteration_zero()
         return repex
@@ -862,7 +860,7 @@ class ReplicaExchange(object):
             thermodynamic_states = mpicomm.bcast(thermodynamic_states, root=0)
             coordinates = mpicomm.bcast(coordinates, root=0)
 
-        repex = cls(thermodynamic_states, coordinates, database, **kwargs)
+        repex = cls(thermodynamic_states, coordinates, database, mpicomm=mpicomm, **kwargs)
         repex.iteration = database.iteration
         repex._initialize()
         return repex
