@@ -2,7 +2,7 @@ import simtk.unit as u
 from simtk.openmm import app
 import simtk.openmm as mm
 from repex.thermodynamics import ThermodynamicState
-from repex.replica_exchange import ReplicaExchange
+from repex.serial_replica_exchange import ReplicaExchange
 import repex.netcdf_io
 import logging
 
@@ -38,5 +38,8 @@ coordinates = [model.getPositions()] * n_replicas
 
 #database = repex.netcdf_io.NetCDFDatabase(nc_filename, states, coordinates)
 
-replica_exchange = ReplicaExchange(states, coordinates, nc_filename)
+#replica_exchange = ReplicaExchange(states, coordinates, nc_filename)
+#replica_exchange = ReplicaExchange.create_repex(states, coordinates, nc_filename, **{})
+replica_exchange = ReplicaExchange.resume_repex(nc_filename, **{})
+replica_exchange.number_of_iterations = 20
 replica_exchange.run()

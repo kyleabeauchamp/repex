@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 import os
-import math
-import copy
 import time
 import datetime
 
@@ -28,34 +26,48 @@ class NetCDFDatabase(object):
 
     def __init__(self, filename, states=None, coordinates=None, **kwargs):
 
+        self.options = process_kwargs(kwargs)
         # Check if netcdf file exists.
-        self.resume = os.path.exists(filename) and (os.path.getsize(filename) > 0)
+        resume = os.path.exists(filename) and (os.path.getsize(filename) > 0)
         
-        self.ncfile = netcdf.Dataset(filename, 'w', version='NETCDF4')
+        if resume:
+            self.ncfile = netcdf.Dataset(filename, 'a', version='NETCDF4')
+        else:
+            self.ncfile = netcdf.Dataset(filename, 'w', version='NETCDF4')
+        
         self.title = "No Title."
         
-        if self.resume: 
-            logger.info("Attempting to resume by reading thermodynamic states and options...")
-            self.initial_states = self.load_thermodynamic_states()
-            self.options = self.load_options()
-            self.check_self_consistency(states, coordinates, options)
+        if resume:
+            self.restore_database()
         else:
-            self.initial_states = states
-            self.options = process_kwargs(kwargs)
-            self.coordinates = coordinates
-            self._initialize_netcdf()
+            self.initialize_database(states, coordinates, **kwargs)
 
         # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
-        for state in self.initial_states:
-            if not state.is_compatible_with(self.initial_states[0]):
+        for state in self.thermodynamic_states:
+            if not state.is_compatible_with(self.thermodynamic_states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
 
-        if not self.resume:
-            self.coordinates = fix_coordinates(coordinates)
+        #self.coordinates = fix_coordinates(self.coordinates)  # Fix stupid unit / numpy issues
 
-    def check_self_consistency(self, states, coordinates, options):
-        """Raises a ValueError is input and loaded data disagree."""
-        pass
+    def initialize_database(self, states, coordinates, **kwargs):
+
+        if states is None or coordinates is None:
+            raise(ValueError("Cannot create database without inputting states and coordinates"))
+
+        self.thermodynamic_states = states        
+        self.coordinates = coordinates
+        self._initialize_netcdf()
+
+
+    def restore_database(self):
+        logger.info("Attempting to resume by reading thermodynamic states and options...")
+        self.thermodynamic_states = self.load_thermodynamic_states()
+        self.options = self.load_options()
+        self.coordinates = self.load_starting_coordinates()
+        self.iteration = self.ncfile.variables["positions"].shape[0]
+
+    def load_starting_coordinates(self):
+        return self.ncfile.variables["positions"][-1]
 
     def _initialize_netcdf(self):
         """
@@ -63,9 +75,9 @@ class NetCDFDatabase(object):
         
         """
         
-        self.n_replicas = len(self.initial_states)
+        self.n_replicas = len(self.thermodynamic_states)
         self.n_atoms = len(self.coordinates[0])
-        self.n_states = len(self.initial_states)
+        self.n_states = len(self.thermodynamic_states)
         assert self.n_replicas == len(self.coordinates), "Error: inconsistent number of replicas."
         
         # Create dimensions.
@@ -119,7 +131,7 @@ class NetCDFDatabase(object):
         ncvar_iteration_time = ncgrp_timings.createVariable('propagate', 'f', ('iteration','replica')) # total time to propagate each replica
         
         # Store thermodynamic states.
-        self._store_thermodynamic_states(self.initial_states)
+        self._store_thermodynamic_states(self.thermodynamic_states)
 
         # Store run options
         self._store_options()
@@ -145,7 +157,7 @@ class NetCDFDatabase(object):
         # Store box vectors and volume.
         for replica_index in range(self.n_states):
             state_index = self.replica_states[replica_index]
-            state = self.initial_states[state_index]
+            state = self.thermodynamic_states[state_index]
             box_vectors = self.replica_box_vectors[replica_index]
             for i in range(3):
                 self.ncfile.variables['box_vectors'][self.iteration,replica_index,i,:] = (box_vectors[i] / units.nanometers)
@@ -189,15 +201,15 @@ class NetCDFDatabase(object):
         setattr(ncvar_temperatures, 'units', 'K')
         setattr(ncvar_temperatures, 'long_name', "temperatures[state] is the temperature of thermodynamic state 'state'")
         for state_index in range(self.n_states):
-            ncvar_temperatures[state_index] = self.initial_states[state_index].temperature / units.kelvin
+            ncvar_temperatures[state_index] = self.thermodynamic_states[state_index].temperature / units.kelvin
 
         # Pressures.
-        if self.initial_states[0].pressure is not None:
+        if self.thermodynamic_states[0].pressure is not None:
             ncvar_temperatures = ncgrp_stateinfo.createVariable('pressures', 'f', ('replica',))
             setattr(ncvar_temperatures, 'units', 'atm')
             setattr(ncvar_temperatures, 'long_name', "pressures[state] is the external pressure of thermodynamic state 'state'")
             for state_index in range(self.n_states):
-                ncvar_temperatures[state_index] = self.initial_states[state_index].pressure / units.atmospheres                
+                ncvar_temperatures[state_index] = self.thermodynamic_states[state_index].pressure / units.atmospheres                
 
         # TODO: Store other thermodynamic variables store in ThermodynamicState?  Generalize?
                 
@@ -206,7 +218,7 @@ class NetCDFDatabase(object):
         setattr(ncvar_serialized_states, 'long_name', "systems[state] is the serialized OpenMM System corresponding to the thermodynamic state 'state'")
         for state_index in range(self.n_states):
             logger.debug("Serializing state %d..." % state_index)
-            serialized = self.initial_states[state_index].system.__getstate__()
+            serialized = self.thermodynamic_states[state_index].system.__getstate__()
             logger.debug("Serialized state is %d B | %.3f KB | %.3f MB" % (len(serialized), len(serialized) / 1024.0, len(serialized) / 1024.0 / 1024.0))
             ncvar_serialized_states[state_index] = serialized
 

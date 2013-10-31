@@ -20,140 +20,30 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class ReplicaExchange(object):
+class SerialReplicaExchange(object):
     """
-    Replica-exchange simulation facility.
-
-    This base class provides a general replica-exchange simulation facility, allowing any set of thermodynamic states
-    to be specified, along with a set of initial coordinates to be assigned to the replicas in a round-robin fashion.
-    No distinction is made between one-dimensional and multidimensional replica layout; by default, the replica mixing
-    scheme attempts to mix *all* replicas to minimize slow diffusion normally found in multidimensional replica exchange
-    simulations.  (Modification of the 'replica_mixing_scheme' setting will allow the tranditional 'neighbor swaps only'
-    scheme to be used.)
-
-    While this base class is fully functional, it does not make use of the special structure of parallel tempering or
-    Hamiltonian exchange variants of replica exchange.  The ParallelTempering and HamiltonianExchange classes should
-    therefore be used for these algorithms, since they are more efficient and provide more convenient ways to initialize
-    the simulation classes.
-
-    Stored configurations, energies, swaps, and restart information are all written to a single output file using
-    the platform portable, robust, and efficient NetCDF4 library.  Plans for future HDF5 support are pending.    
-    
-    ATTRIBUTES
-
-    The following parameters (attributes) can be set after the object has been created, but before it has been
-    initialized by a call to run():
-
-    * collision_rate (units: 1/time) - the collision rate used for Langevin dynamics (default: 90 ps^-1)
-    * constraint_tolerance (dimensionless) - relative constraint tolerance (default: 1e-6)
-    * timestep (units: time) - timestep for Langevin dyanmics (default: 2 fs)
-    * nsteps_per_iteration (dimensionless) - number of timesteps per iteration (default: 500)
-    * number_of_iterations (dimensionless) - number of replica-exchange iterations to simulate (default: 100)
-    * number_of_equilibration_iterations (dimensionless) - number of equilibration iterations before beginning exchanges (default: 0)
-    * equilibration_timestep (units: time) - timestep for use in equilibration (default: 2 fs)
-    * replica_mixing_scheme (string) - scheme used to swap replicas: 'swap-all' or 'swap-neighbors' (default: 'swap-all')
-    * online_analysis (boolean) - if True, analysis will occur each iteration (default: False)
-    
-    TODO
-
-    * Improve speed of Maxwell-Boltzmann velocity assignment.
-    * Replace hard-coded Langevin dynamics with general MCMC moves.
-    * Allow parallel resource to be used, if available (likely via Parallel Python).
-    * Add support for and autodetection of other NetCDF4 interfaces.
-    * Add HDF5 support.
-
-    EXAMPLES
-
-    Parallel tempering simulation of alanine dipeptide in implicit solvent (replica exchange among temperatures)
-    (This is just an illustrative example; use ParallelTempering class for actual production parallel tempering simulations.)
-    
-    >>> # Create test system.
-    >>> import simtk.pyopenmm.extras.testsystems as testsystems
-    >>> [system, coordinates] = testsystems.AlanineDipeptideImplicit()
-    >>> # Create thermodynamic states for parallel tempering with exponentially-spaced schedule.
-    >>> import simtk.unit as units
-    >>> import math
-    >>> n_replicas = 3 # number of temperature replicas
-    >>> T_min = 298.0 * units.kelvin # minimum temperature
-    >>> T_max = 600.0 * units.kelvin # maximum temperature
-    >>> T_i = [ T_min + (T_max - T_min) * (np.exp(float(i) / float(n_replicas-1)) - 1.0) / (np.e - 1.0) for i in range(n_replicas) ]
-    >>> from thermodynamics import ThermodynamicState
-    >>> states = [ ThermodynamicState(system=system, temperature=T_i[i]) for i in range(n_replicas) ]
-    >>> import tempfile
-    >>> file = tempfile.NamedTemporaryFile() # use a temporary file for testing -- you will want to keep this file, since it stores output and checkpoint data
-    >>> # Create simulation.
-    >>> simulation = ReplicaExchange(states, coordinates, file.name) # initialize the replica-exchange simulation
-    >>> simulation.minimize = False
-    >>> simulation.number_of_iterations = 2 # set the simulation to only run 2 iterations
-    >>> simulation.timestep = 2.0 * units.femtoseconds # set the timestep for integration
-    >>> simulation.nsteps_per_iteration = 50 # run 50 timesteps per iteration
-    >>> simulation.run() # run the simulation
-
     """    
 
-    def __init__(self, states, coordinates, **kwargs):
+    def __init__(self, states, coordinates, database=None, **kwargs):
         """
-        Initialize replica-exchange simulation facility.
-
-        ARGUMENTS
-        
-        states (list of ThermodynamicState) - Thermodynamic states to simulate, where one replica is allocated per state.
-           Each state must have a system with the same number of atoms, and the same
-           thermodynamic ensemble (combination of temperature, pressure, pH, etc.) must
-           be defined for each.
-        coordinates (Coordinate object or iterable container of Coordinate objects) - One or more sets of initial coordinates
-           to be initially assigned to replicas in a round-robin fashion, provided simulation is not resumed from store file.
-           Currently, coordinates must be specified as a list of simtk.unit.Quantity-wrapped numpy arrays.
-        store_filename (string) - Name of file to bind simulation to use as storage for checkpointing and storage of results.
-
-        OPTIONAL ARGUMENTS
-        
-        protocol (dict) - Optional protocol to use for specifying simulation protocol as a dict. Provided keywords will be matched to object variables to replace defaults.
-        mm (implementation of simtk.openmm) - OpenMM API implementation to use (default: simtk.openmm)
-        mpicomm (mpi4py communicator) - MPI communicator, if parallel execution is desired (default: None)
-        metadata (dict) - metadata to store in a 'metadata' group in store file
-
-        NOTES
-        
-        If store_filename exists, the simulation will try to resume from this file.
-        If thermodynamic state information can be found in the store file, this will be read, and 'states' will be ignored.
-        If the store file exists, coordinates will be read from this file, and 'coordinates' will be ignored.        
-        The provided 'protocol' will override any options restored from the store file.
-
         """
 
         # To allow for parameters to be modified after object creation, class is not initialized until a call to self._initialize().
         self._initialized = False
+        
+        self.mpicomm = None
 
-        # Set MPI communicator (or None if not used).
         options = process_kwargs(kwargs)
-        self.mpicomm = kwargs.get("mpicomm")
         
-        if (self.mpicomm is not None and self.mpicomm.rank == 0) or self.mpicomm is None:
-            self.head_node = True
-        else:
-            self.head_node = False
+        self.head_node = True
 
-        if self.head_node:
-            self.database = database
-            
-        if self.mpicomm:
-            self.resume = self.mpicomm.bcast(self.resume, root=0) # use whatever root node decides
+        self.database = database
 
-        if self.resume == False:
-            self.states = states
-            self.provided_coordinates = fix_coordinates(coordinates)
-            self.options = options
-        else:
-            if self.head_node:
-                self.states = self.database.initial_states
-                self.options = self.database.options
-                self.provided_coordinates = self.database.get_starting_coordinates()
-            elif self.mpicomm:
-                self.states = self.mpicomm.bcast(self.states, root=0) # use whatever root node decides
-                self.options = self.mpicomm.bcast(self.options, root=0) # use whatever root node decides
-                self.provided_coordinates = self.mpicomm.bcast(self.provided_coordinates, root=0) # use whatever root node decides
-        
+        self.states = states
+        #self.provided_coordinates = fix_coordinates(coordinates)
+        self.provided_coordinates = coordinates
+        self.options = options
+                
         self.platform = kwargs.get("platform")  # For convenience
         
         self.n_replicas = len(self.states)  # Determine number of replicas from the number of specified thermodynamic states.
@@ -164,121 +54,10 @@ class ReplicaExchange(object):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
                 
         self.set_attributes()
-
-    def __OLDinit__(self, states, coordinates, filename, **kwargs):
-        """
-        Initialize replica-exchange simulation facility.
-
-        ARGUMENTS
-        
-        states (list of ThermodynamicState) - Thermodynamic states to simulate, where one replica is allocated per state.
-           Each state must have a system with the same number of atoms, and the same
-           thermodynamic ensemble (combination of temperature, pressure, pH, etc.) must
-           be defined for each.
-        coordinates (Coordinate object or iterable container of Coordinate objects) - One or more sets of initial coordinates
-           to be initially assigned to replicas in a round-robin fashion, provided simulation is not resumed from store file.
-           Currently, coordinates must be specified as a list of simtk.unit.Quantity-wrapped numpy arrays.
-        store_filename (string) - Name of file to bind simulation to use as storage for checkpointing and storage of results.
-
-        OPTIONAL ARGUMENTS
-        
-        protocol (dict) - Optional protocol to use for specifying simulation protocol as a dict. Provided keywords will be matched to object variables to replace defaults.
-        mm (implementation of simtk.openmm) - OpenMM API implementation to use (default: simtk.openmm)
-        mpicomm (mpi4py communicator) - MPI communicator, if parallel execution is desired (default: None)
-        metadata (dict) - metadata to store in a 'metadata' group in store file
-
-        NOTES
-        
-        If store_filename exists, the simulation will try to resume from this file.
-        If thermodynamic state information can be found in the store file, this will be read, and 'states' will be ignored.
-        If the store file exists, coordinates will be read from this file, and 'coordinates' will be ignored.        
-        The provided 'protocol' will override any options restored from the store file.
-
-        """
-
-        # To allow for parameters to be modified after object creation, class is not initialized until a call to self._initialize().
-        self._initialized = False
-
-        # Set MPI communicator (or None if not used).
-        options = process_kwargs(kwargs)
-        self.mpicomm = kwargs.get("mpicomm")
-        
-        if (self.mpicomm is not None and self.mpicomm.rank == 0) or self.mpicomm is None:
-            self.head_node = True
-        else:
-            self.head_node = False
-
-        if self.head_node:
-            self.database = netcdf_io.NetCDFDatabase(filename, states, coordinates, **kwargs)
-            self.resume = self.database.resume
-            
-        if self.mpicomm:
-            self.resume = self.mpicomm.bcast(self.resume, root=0) # use whatever root node decides
-
-        if self.resume == False:
-            self.states = states
-            self.provided_coordinates = fix_coordinates(coordinates)
-            self.options = options
-        else:
-            if self.head_node:
-                self.states = self.database.initial_states
-                self.options = self.database.options
-                self.provided_coordinates = self.database.get_starting_coordinates()
-            elif self.mpicomm:
-                self.states = self.mpicomm.bcast(self.states, root=0) # use whatever root node decides
-                self.options = self.mpicomm.bcast(self.options, root=0) # use whatever root node decides
-                self.provided_coordinates = self.mpicomm.bcast(self.provided_coordinates, root=0) # use whatever root node decides
-        
-        self.platform = kwargs.get("platform")  # For convenience
-        
-        self.n_replicas = len(self.states)  # Determine number of replicas from the number of specified thermodynamic states.
-
-        # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
-        for state in self.states:
-            if not state.is_compatible_with(self.states[0]):
-                raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
-                
-        self.set_attributes()
-
 
     def set_attributes(self):
         for key, val in self.options.iteritems():
             setattr(self, key, val)
-
-    def __repr__(self):
-        """
-        Return a 'formal' representation that can be used to reconstruct the class, if possible.
-
-        """
-
-        # TODO: Can we make this a more useful expression?
-        return "<instance of ReplicaExchange>"
-
-    def __str__(self):
-        """
-        Show an 'informal' human-readable representation of the replica-exchange simulation.
-
-        """
-        
-        r =  ""
-        r += "Replica-exchange simulation\n"
-        r += "\n"
-        r += "%d replicas\n" % str(self.n_replicas)
-        r += "%d coordinate sets provided\n" % len(self.provided_coordinates)
-        r += "file store: %s\n" % str(self.store_filename)
-        r += "initialized: %s\n" % str(self._initialized)
-        r += "\n"
-        r += "PARAMETERS\n"
-        r += "collision rate: %s\n" % str(self.collision_rate)
-        r += "relative constraint tolerance: %s\n" % str(self.constraint_tolerance)
-        r += "timestep: %s\n" % str(self.timestep)
-        r += "number of steps/iteration: %s\n" % str(self.nsteps_per_iteration)
-        r += "number of iterations: %s\n" % str(self.number_of_iterations)
-        r += "equilibration timestep: %s\n" % str(self.equilibration_timestep)
-        r += "number of equilibration iterations: %s\n" % str(self.number_of_equilibration_iterations)
-        r += "\n"
-        
-        return r
 
     def run(self):
         """
@@ -357,58 +136,19 @@ class ReplicaExchange(object):
         logger.debug("Creating and caching Context objects...")
         MAX_SEED = (1<<31) - 1 # maximum seed value (max size of signed C long)
         seed = int(np.random.randint(MAX_SEED)) # TODO: Is this the right maximum value to use?
-        if self.mpicomm:
-            # Compile all kernels on master process to avoid nvcc deadlocks.
-            # TODO: Fix this when nvcc fix comes out.
-            initial_time = time.time()
-            if self.mpicomm.rank == 0:
-                for state_index in range(self.n_states):
-                    logger.debug("Master node compiling kernels for state %d / %d..." % (state_index, self.n_states))
-                    state = self.states[state_index]
-                    integrator = mm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)                    
-                    integrator.setRandomNumberSeed(seed + self.mpicomm.rank) 
-                    context = mm.Context(state.system, integrator, self.platform)
-                    mm.LocalEnergyMinimizer.minimize(context, 0, 1) # DEBUG
-                    del context, integrator
-            self.mpicomm.barrier()
-            final_time = time.time()
-            elapsed_time = final_time - initial_time
-            logger.debug("Barrier complete.  Compiling kernels took %.1f s." % elapsed_time)
 
-            # Create cached contexts for only the states this process will handle.
-            initial_time = time.time()
-            for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
-                logger.debug("Node %d / %d creating Context for state %d..." % (self.mpicomm.rank, self.mpicomm.size, state_index))
-                state = self.states[state_index]
-                try:
-                    state._integrator = mm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)                    
-                    state._integrator.setRandomNumberSeed(seed + self.mpicomm.rank) 
-                    initial_context_time = time.time() # DEBUG
-                    if self.platform:
-                        logger.info("Node %d / %d: Using platform %s" % (self.mpicomm.rank, self.mpicomm.size, self.platform.getName()))
-                        state._context = mm.Context(state.system, state._integrator, self.platform)
-                    else:
-                        logger.info("Node %d / %d: No platform specified." % (self.mpicomm.rank, self.mpicomm.size))
-                        state._context = mm.Context(state.system, state._integrator)                    
-                    logger.debug("Node %d / %d: Context creation took %.3f s" % (self.mpicomm.rank, self.mpicomm.size, time.time() - initial_context_time))
-                except Exception as e:
-                    print e
-            logger.debug("Note %d / %d: Context creation done.  Waiting for MPI barrier..." % (self.mpicomm.rank, self.mpicomm.size))
-            self.mpicomm.barrier()
-            logger.debug("Barrier complete.")
-        else:
-            # Serial version.
-            initial_time = time.time()
-            for (state_index, state) in enumerate(self.states):  
-                logger.debug("Creating Context for state %d..." % state_index)
-                state._integrator = mm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)
-                state._integrator.setRandomNumberSeed(seed)
-                initial_context_time = time.time() # DEBUG
-                if self.platform:
-                    state._context = mm.Context(state.system, state._integrator, self.platform)
-                else:
-                    state._context = mm.Context(state.system, state._integrator)
-                logger.debug("Context creation took %.3f s" % (time.time() - initial_context_time))
+        # Serial version.
+        initial_time = time.time()
+        for (state_index, state) in enumerate(self.states):  
+            logger.debug("Creating Context for state %d..." % state_index)
+            state._integrator = mm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)
+            state._integrator.setRandomNumberSeed(seed)
+            initial_context_time = time.time() # DEBUG
+            if self.platform:
+                state._context = mm.Context(state.system, state._integrator, self.platform)
+            else:
+                state._context = mm.Context(state.system, state._integrator)
+            logger.debug("Context creation took %.3f s" % (time.time() - initial_context_time))
         final_time = time.time()
         elapsed_time = final_time - initial_time
         logger.debug("%.3f s elapsed." % elapsed_time)
@@ -425,9 +165,7 @@ class ReplicaExchange(object):
         self.Nij_proposed       = np.zeros([self.n_states,self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
         self.Nij_accepted       = np.zeros([self.n_states,self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
 
-        # Distribute coordinate information to replicas in a round-robin fashion, making a deep copy.
-        if not self.resume:
-            self.replica_coordinates = [ copy.deepcopy(self.provided_coordinates[replica_index % len(self.provided_coordinates)]) for replica_index in range(self.n_states) ]
+        self.replica_coordinates = [ copy.deepcopy(self.provided_coordinates[replica_index % len(self.provided_coordinates)]) for replica_index in range(self.n_states) ]
 
         # Assign default box vectors.
         self.replica_box_vectors = list()
@@ -472,16 +210,8 @@ class ReplicaExchange(object):
             self.replica_states[replica_index] = replica_index
 
         self._initialized = True
-
-    def restore_coordinates(self):    
-        # Resume from NetCDF file.
-        self._resume_from_netcdf()
-
-        # Show energies.
-        if self.show_energies:
-            self._show_energies()            
         
-    def run_iteration_zero(self):
+    def _run_iteration_zero(self):
             # Minimize and equilibrate all replicas.
             self._minimize_and_equilibrate()
             
@@ -576,60 +306,7 @@ class ReplicaExchange(object):
 
         return elapsed_time
 
-    def _propagate_replicas_mpi(self):
-        """
-        Propagate all replicas using MPI communicator.
-
-        It is presumed all nodes have the correct configurations in the correct replica slots, but that state indices may be unsynchronized.
-
-        TODO
-
-        * Move synchronization of state information to mix_replicas?
-        * Broadcast from root node only?
-
-        """
-
-        # Propagate all replicas.
-        logger.debug("Propagating all replicas for %.3f ps..." % (self.nsteps_per_iteration * self.timestep / units.picoseconds))
-
-        # Run just this node's share of states.
-        logger.debug("Running trajectories...")
-        start_time = time.time()
-        # replica_lookup = { self.replica_states[replica_index] : replica_index for replica_index in range(self.n_states) } # replica_lookup[state_index] is the replica index currently at state 'state_index' # requires Python 2.7 features
-        replica_lookup = dict( (self.replica_states[replica_index], replica_index) for replica_index in range(self.n_states) ) # replica_lookup[state_index] is the replica index currently at state 'state_index' # Python 2.6 compatible
-        replica_indices = [ replica_lookup[state_index] for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size) ] # list of replica indices for this node to propagate
-        for replica_index in replica_indices:
-            logger.debug("Node %3d/%3d propagating replica %3d state %3d..." % (self.mpicomm.rank, self.mpicomm.size, replica_index, self.replica_states[replica_index]))
-            self._propagate_replica(replica_index)
-        end_time = time.time()        
-        elapsed_time = end_time - start_time
-        # Collect elapsed time.
-        node_elapsed_times = self.mpicomm.gather(elapsed_time, root=0) # barrier
-        if self.mpicomm.rank == 0:
-            node_elapsed_times = np.array(node_elapsed_times)
-            end_time = time.time()        
-            elapsed_time = end_time - start_time
-            barrier_wait_times = elapsed_time - node_elapsed_times
-            logger.debug("Running trajectories: elapsed time %.3f s (barrier time min %.3f s | max %.3f s | avg %.3f s)" % (elapsed_time, barrier_wait_times.min(), barrier_wait_times.max(), barrier_wait_times.mean()))
-            logger.debug("Total time spent waiting for GPU: %.3f s" % (node_elapsed_times.sum()))
-
-        # Send final configurations and box vectors back to all nodes.
-        if (self.mpicomm.rank == 0):
-            logger.debug("Synchronizing trajectories...")
-
-        start_time = time.time()
-        replica_indices_gather = self.mpicomm.allgather(replica_indices)
-        replica_coordinates_gather = self.mpicomm.allgather([ self.replica_coordinates[replica_index] for replica_index in replica_indices ])
-        replica_box_vectors_gather = self.mpicomm.allgather([ self.replica_box_vectors[replica_index] for replica_index in replica_indices ])
-        for (source, replica_indices) in enumerate(replica_indices_gather):
-            for (index, replica_index) in enumerate(replica_indices):
-                self.replica_coordinates[replica_index] = replica_coordinates_gather[source][index]
-                self.replica_box_vectors[replica_index] = replica_box_vectors_gather[source][index]
-
-        end_time = time.time()
-        logger.debug("Synchronizing configurations and box vectors: elapsed time %.3f s" % (end_time - start_time))
-        
-    def _propagate_replicas_serial(self):        
+    def _actually_propagate_replicas(self):        
         """
         Propagate all replicas using serial execution.
 
@@ -650,10 +327,7 @@ class ReplicaExchange(object):
         """
         start_time = time.time()
 
-        if self.mpicomm:
-            self._propagate_replicas_mpi()
-        else:
-            self._propagate_replicas_serial()
+        self._actually_propagate_replicas()
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -687,6 +361,9 @@ class ReplicaExchange(object):
         # Clean up.
         del integrator, context
 
+    def _minimize_all_replicas(self):
+        for replica_index in range(self.n_states):
+            self._minimize_replica(replica_index)
             
     def _minimize_and_equilibrate(self):
         """
@@ -697,34 +374,7 @@ class ReplicaExchange(object):
         # Minimize
         if self.minimize:
             logger.debug("Minimizing all replicas...")
-
-            if self.mpicomm:
-                # MPI implementation.
-                
-                # Minimize this node's share of replicas.
-                start_time = time.time()
-                for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
-                    logger.debug("node %d / %d : minimizing replica %d / %d" % (self.mpicomm.rank, self.mpicomm.size, replica_index, self.n_states))
-                    self._minimize_replica(replica_index)
-                end_time = time.time()
-                self.mpicomm.barrier()
-                logger.debug("Running trajectories: elapsed time %.3f s" % (end_time - start_time))
-
-                # Send final configurations and box vectors back to all nodes.
-                logger.debug("Synchronizing trajectories...")
-                replica_coordinates_gather = self.mpicomm.allgather(self.replica_coordinates[self.mpicomm.rank:self.n_states:self.mpicomm.size])
-                replica_box_vectors_gather = self.mpicomm.allgather(self.replica_box_vectors[self.mpicomm.rank:self.n_states:self.mpicomm.size])        
-                for replica_index in range(self.n_states):
-                    source = replica_index % self.mpicomm.size # node with trajectory data
-                    index = replica_index // self.mpicomm.size # index within trajectory batch
-                    self.replica_coordinates[replica_index] = replica_coordinates_gather[source][index]
-                    self.replica_box_vectors[replica_index] = replica_box_vectors_gather[source][index]
-                logger.debug("Synchronizing configurations and box vectors: elapsed time %.3f s" % (end_time - start_time))
-
-            else:
-                # Serial implementation.
-                for replica_index in range(self.n_states):
-                    self._minimize_replica(replica_index)
+            self._minimize_all_replicas()
 
         # Equilibrate
         production_timestep = self.timestep
@@ -733,6 +383,10 @@ class ReplicaExchange(object):
             self._propagate_replicas()
         self.timestep = production_timestep
 
+    def _actually_compute_energies(self):
+        for state_index in range(self.n_states):
+            for replica_index in range(self.n_states):
+                self.u_kl[replica_index,state_index] = self.states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
 
     def _compute_energies(self):
         """
@@ -748,27 +402,8 @@ class ReplicaExchange(object):
         start_time = time.time()
         
         logger.debug("Computing energies...")
-
-        if self.mpicomm:
-            # MPI version.
-
-            # Compute energies for this node's share of states.
-            for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
-                for replica_index in range(self.n_states):
-                    self.u_kl[replica_index,state_index] = self.states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
-
-            # Send final energies to all nodes.
-            energies_gather = self.mpicomm.allgather(self.u_kl[:,self.mpicomm.rank:self.n_states:self.mpicomm.size])
-            for state_index in range(self.n_states):
-                source = state_index % self.mpicomm.size # node with trajectory data
-                index = state_index // self.mpicomm.size # index within trajectory batch
-                self.u_kl[:,state_index] = energies_gather[source][:,index]
-
-        else:
-            # Serial version.
-            for state_index in range(self.n_states):
-                for replica_index in range(self.n_states):
-                    self.u_kl[replica_index,state_index] = self.states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
+        
+        self._actually_compute_energies()
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -1149,17 +784,18 @@ class ReplicaExchange(object):
             print ""
 
     @classmethod
-    def create_repex(cls, states, coordinates, filename, mpicomm=None, **kwargs):
-        database = netcdf_io.NetCDFDatabase(filename, states, kwargs)
-        repex = cls(database, kwargs)
-        repex.initialize()
-        repex.run_iteration_zero()
+    def create_repex(cls, thermodynamic_states, coordinates, filename, **kwargs):
+        database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates, **kwargs)
+        repex = cls(thermodynamic_states, coordinates, database, **kwargs)
+        repex._initialize()
+        repex._run_iteration_zero()
         return repex
     
     @classmethod
     def resume_repex(cls, filename, **kwargs):
         database = netcdf_io.NetCDFDatabase(filename, kwargs)
-        repex = cls(database, kwargs)
-        repex.initialize()
-        repex.restore_coordinates()
+        thermodynamic_states, coordinates = database.thermodynamic_states, database.coordinates 
+        repex = cls(thermodynamic_states, coordinates, database, **kwargs)
+        repex.iteration = database.iteration
+        repex._initialize()
         return repex
