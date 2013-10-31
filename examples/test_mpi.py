@@ -4,7 +4,7 @@ import simtk.unit as u
 from simtk.openmm import app
 import simtk.openmm as mm
 from repex.thermodynamics import ThermodynamicState
-from repex.serial_replica_exchange import ReplicaExchange
+from repex.replica_exchange import ReplicaExchange
 import repex.netcdf_io
 import logging
 
@@ -43,5 +43,5 @@ coordinates = [model.getPositions()] * n_replicas
 #replica_exchange = ReplicaExchange(states, coordinates, nc_filename)
 #replica_exchange = ReplicaExchange.create_repex(states, coordinates, nc_filename,  mpicomm=MPI.COMM_WORLD, **{})
 replica_exchange = ReplicaExchange.resume_repex(nc_filename, mpicomm=MPI.COMM_WORLD, **{})
-replica_exchange.number_of_iterations = 20
+replica_exchange.number_of_iterations = 30
 replica_exchange.run()

@@ -15,6 +15,7 @@ from constants import kB
 from utils import time_and_print, process_kwargs, fix_coordinates, generate_maxwell_boltzmann_velocities
 import citations
 import netcdf_io
+from version import version as __version__
 
 import logging
 logger = logging.getLogger(__name__)
@@ -439,11 +440,6 @@ class ReplicaExchange(object):
             self._propagate_replicas()
         self.timestep = production_timestep
 
-    def _actually_compute_energies(self):
-        for state_index in range(self.n_states):
-            for replica_index in range(self.n_states):
-                self.u_kl[replica_index,state_index] = self.states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
-
     def _compute_energies(self):
         """
         Compute energies of all replicas at all states.
@@ -459,12 +455,34 @@ class ReplicaExchange(object):
         
         logger.debug("Computing energies...")
         
-        self._actually_compute_energies()
+        if self.mpicomm:
+            self._compute_energies_mpi()
+        else:
+            self._compute_energies_serial()
 
         end_time = time.time()
         elapsed_time = end_time - start_time
         time_per_energy= elapsed_time / float(self.n_states)**2 
         logger.debug("Time to compute all energies %.3f s (%.3f per energy calculation)." % (elapsed_time, time_per_energy))
+
+    def _compute_energies_mpi(self):
+        # Compute energies for this node's share of states.
+        for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
+            for replica_index in range(self.n_states):
+                self.u_kl[replica_index,state_index] = self.states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
+
+        # Send final energies to all nodes.
+        energies_gather = self.mpicomm.allgather(self.u_kl[:,self.mpicomm.rank:self.n_states:self.mpicomm.size])
+        for state_index in range(self.n_states):
+            source = state_index % self.mpicomm.size # node with trajectory data
+            index = state_index // self.mpicomm.size # index within trajectory batch
+            self.u_kl[:,state_index] = energies_gather[source][:,index]
+
+    def _compute_energies_serial(self):
+        for state_index in range(self.n_states):
+            for replica_index in range(self.n_states):
+                self.u_kl[replica_index,state_index] = self.states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
+
 
     def _mix_all_replicas(self):
         """
@@ -760,7 +778,12 @@ class ReplicaExchange(object):
         logger.info("Time to compute mixing statistics %.3f s" % elapsed_time)
 
     def output_iteration(self):
-        """Write positions, states, and energies of current iteration to arbitrary database.
+        """Get relevant data from current iteration and store in database.
+        
+        Notes
+        -----
+        Will save the following information:
+        "iteration", "coordinates", "box_vectors", "volumes", "replica_states", "energies", "proposed", "accepted", "time"
         """
         if not self.head_node:
             return
@@ -783,9 +806,7 @@ class ReplicaExchange(object):
     
 
     def _run_sanity_checks(self):
-        """
-        Run some checks on current state information to see if something has gone wrong that precludes continuation.
-
+        """Run some checks on current state information to see if something has gone wrong that precludes continuation.
         """
 
         abort = False
@@ -811,9 +832,7 @@ class ReplicaExchange(object):
 
 
     def _show_energies(self):
-        """
-        Show energies (in units of kT) for all replicas at all states.
-
+        """Show energies (in units of kT) for all replicas at all states.
         """
 
         # Only root node can print.
@@ -840,7 +859,7 @@ class ReplicaExchange(object):
     @classmethod
     def create_repex(cls, thermodynamic_states, coordinates, filename, mpicomm=None, **kwargs):
         if mpicomm is None or (mpicomm.rank == 0):
-            database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates, **kwargs)
+            database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates, **kwargs)  # To do: eventually use factory for looking up database type via filename
         else:
             database = None
         
@@ -852,7 +871,7 @@ class ReplicaExchange(object):
     @classmethod
     def resume_repex(cls, filename, mpicomm=None, **kwargs):
         if mpicomm is None or (mpicomm.rank == 0):
-            database = netcdf_io.NetCDFDatabase(filename, kwargs)
+            database = netcdf_io.NetCDFDatabase(filename, **kwargs)  # To do: eventually use factory for looking up database type via filename
             thermodynamic_states, coordinates = database.thermodynamic_states, database.coordinates 
         else:
             thermodynamic_states = None

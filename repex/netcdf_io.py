@@ -2,10 +2,8 @@
 
 import os
 import time
-import datetime
 
 import numpy as np
-import numpy.linalg
 
 import simtk.openmm as mm
 import simtk.unit as units
@@ -14,12 +12,12 @@ import netCDF4 as netcdf
 
 from thermodynamics import ThermodynamicState
 from utils import time_and_print, process_kwargs, fix_coordinates
-from constants import kB
+from version import version as __version__
 
 import logging
 logger = logging.getLogger(__name__)
 
-__version__ = 0.0
+
 
 class NetCDFDatabase(object):
     options_to_store = ['collision_rate', 'constraint_tolerance', 'timestep', 'nsteps_per_iteration', 'number_of_iterations', 'equilibration_timestep', 'number_of_equilibration_iterations', 'title', 'minimize', 'replica_mixing_scheme', 'online_analysis', 'show_mixing_statistics']
@@ -49,8 +47,6 @@ class NetCDFDatabase(object):
         for state in self.thermodynamic_states:
             if not state.is_compatible_with(self.thermodynamic_states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
-
-        #self.coordinates = fix_coordinates(self.coordinates)  # Fix stupid unit / numpy issues
 
     def initialize_database(self, states, coordinates, **kwargs):
 
