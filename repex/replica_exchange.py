@@ -1,7 +1,5 @@
 #!/usr/local/bin/env python
 
-import os
-import sys
 import copy
 import time
 import datetime
@@ -12,11 +10,9 @@ import numpy.linalg
 import simtk.openmm as mm
 import simtk.unit as units
 
-import netCDF4 as netcdf # netcdf4-python is used in place of scipy.io.netcdf for now
-
 from thermodynamics import ThermodynamicState
 from constants import kB
-from utils import time_and_print, process_kwargs, fix_coordinates
+from utils import time_and_print, process_kwargs, fix_coordinates, generate_maxwell_boltzmann_velocities
 import citations
 import netcdf_io
 
@@ -154,7 +150,7 @@ class ReplicaExchange(object):
             self.options = options
         else:
             if self.head_node:
-                self.states == self.database.states
+                self.states == self.database.initial_states
                 self.options = self.database.options
                 self.provided_coordinates = self.database.coordinates
             elif self.mpicomm:
@@ -249,7 +245,7 @@ class ReplicaExchange(object):
                 self._analysis()
 
             # Write to storage file.
-            self._write_iteration_netcdf()
+            self.output_iteration()
             
             # Increment iteration counter.
             self.iteration += 1
@@ -274,6 +270,7 @@ class ReplicaExchange(object):
         self._finalize()
 
     def get_platform(self):
+        """THIS IS A HACK TO GET A DEFAULT PLATFORM."""
 
         if self.platform is not None:
             return
@@ -298,7 +295,7 @@ class ReplicaExchange(object):
         if self.mpicomm:
             logger.debug("Initialized node %d / %d" % (self.mpicomm.rank, self.mpicomm.size))
   
-        self.display_citations()
+        citations.display_citations(self.replica_mixing_scheme, self.online_analysis)
 
         # Determine number of alchemical states.
         self.n_states = len(self.states)
@@ -364,7 +361,7 @@ class ReplicaExchange(object):
         logger.debug("%.3f s elapsed." % elapsed_time)
 
         # Determine number of atoms in systems.
-        self.natoms = self.states[0].system.getNumParticles()
+        self.n_atoms = self.states[0].system.getNumParticles()
   
         # Allocate storage.
         self.replica_coordinates = list() # replica_coordinates[i] is the configuration currently held in replica i
@@ -416,11 +413,8 @@ class ReplicaExchange(object):
             if self.show_energies:
                 self._show_energies()
 
-            # Initialize NetCDF file.
-            self._initialize_netcdf()
-
             # Store initial state.
-            self._write_iteration_netcdf()
+            self.output_iteration()
 
         # Analysis objet starts off empty.
         # TODO: Use an empty dict instead?
@@ -429,7 +423,6 @@ class ReplicaExchange(object):
         # Signal that the class has been initialized.
         self._initialized = True
 
-        return
 
     def _finalize(self):
         """Do anything necessary to finish run except close files.
@@ -450,37 +443,6 @@ class ReplicaExchange(object):
 
         self.database.close()
         
-    def display_citations(self):
-        """
-        Display papers to be cited.
-
-        TODO:
-
-        * Add original citations for various replica-exchange schemes.
-        * Show subset of OpenMM citations based on what features are being used.
-
-        """
-        
-        openmm_citations = """\
-        Friedrichs MS, Eastman P, Vaidyanathan V, Houston M, LeGrand S, Beberg AL, Ensign DL, Bruns CM, and Pande VS. Accelerating molecular dynamic simulations on graphics processing units. J. Comput. Chem. 30:864, 2009. DOI: 10.1002/jcc.21209
-        Eastman P and Pande VS. OpenMM: A hardware-independent framework for molecular simulations. Comput. Sci. Eng. 12:34, 2010. DOI: 10.1109/MCSE.2010.27
-        Eastman P and Pande VS. Efficient nonbonded interactions for molecular dynamics on a graphics processing unit. J. Comput. Chem. 31:1268, 2010. DOI: 10.1002/jcc.21413
-        Eastman P and Pande VS. Constant constraint matrix approximation: A robust, parallelizable constraint method for molecular simulations. J. Chem. Theor. Comput. 6:434, 2010. DOI: 10.1021/ct900463w"""
-        
-        gibbs_citations = """\
-        Chodera JD and Shirts MR. Replica exchange and expanded ensemble simulations as Gibbs sampling: Simple improvements for enhanced mixing. J. Chem. Phys., in press. arXiv: 1105.5749"""
-
-        mbar_citations = """\
-        Shirts MR and Chodera JD. Statistically optimal analysis of samples from multiple equilibrium states. J. Chem. Phys. 129:124105, 2008. DOI: 10.1063/1.2978177"""
-
-        logger.info("Please cite the following:")
-        logger.info("")
-        logger.info("%s" % openmm_citations)
-        if self.replica_mixing_scheme == 'swap-all':
-            logger.info("%s" % gibbs_citations)
-        if self.online_analysis:
-            logger.info("%s" % mbar_citations)
-
     def _propagate_replica(self, replica_index):
         """
         Propagate the replica corresponding to the specified replica index.
@@ -622,8 +584,6 @@ class ReplicaExchange(object):
         ns_per_day = self.timestep * self.nsteps_per_iteration / time_per_replica * 24*60*60 / units.nanoseconds
         logger.debug("Time to propagate all replicas: %.3f s (%.3f per replica, %.3f ns/day)." % (elapsed_time, time_per_replica, ns_per_day))
 
-        return
-
     def _minimize_replica(self, replica_index):
         """
         Minimize the specified replica.
@@ -650,7 +610,6 @@ class ReplicaExchange(object):
         # Clean up.
         del integrator, context
 
-        return
             
     def _minimize_and_equilibrate(self):
         """
@@ -787,8 +746,6 @@ class ReplicaExchange(object):
                 self.Nij_accepted[istate,jstate] += 1
                 self.Nij_accepted[jstate,istate] += 1
 
-        return
-
     def _mix_all_replicas_weave(self):
         """
         Attempt exchanges between all replicas to enhance mixing.
@@ -866,8 +823,6 @@ class ReplicaExchange(object):
         self.replica_states = replica_states
         self.Nij_proposed = Nij_proposed
         self.Nij_accepted = Nij_accepted
-
-        return
 
     def _mix_neighboring_replicas(self):
         """
@@ -952,8 +907,6 @@ class ReplicaExchange(object):
         logger.debug("Accepted %d / %d attempted swaps (%.1f %%)" % (nswaps_accepted, nswaps_attempted, swap_fraction_accepted * 100.0))
 
         # Estimate cumulative transition probabilities between all states.
-        #Nij_accepted = self.ncfile.variables['accepted'][:,:,:].sum(0) + self.Nij_accepted        
-        #Nij_proposed = self.ncfile.variables['proposed'][:,:,:].sum(0) + self.Nij_proposed
         Nij_accepted = self.database.accepted[:].sum(0) + self.Nij_accepted
         Nij_proposed = self.database.proposed[:].sum(0) + self.Nij_proposed
         swap_Pij_accepted = np.zeros([self.n_states,self.n_states], np.float64)
@@ -1047,10 +1000,11 @@ class ReplicaExchange(object):
             return
 
         coordinates = np.array([self.replica_coordinates[replica_index] / units.nanometers for replica_index in range(self.n_states)])
-        box_vectors = np.array([self.replica_box_vectors[replica_index] for replica_index in range(self.n_states)])
+        box_vectors = np.array([self.replica_box_vectors[replica_index] / units.nanometers for replica_index in range(self.n_states)])
         
         volumes = []
-        for replica_index, v in enumerate(box_vectors):
+        for replica_index in range(self.n_states):
+            v = self.replica_box_vectors[replica_index]
             state_index = self.replica_states[replica_index]
             state = self.states[state_index]
             volumes.append(state._volume(v) / (units.nanometers**3))

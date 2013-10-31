@@ -10,9 +10,9 @@ logging.basicConfig(level=0)
 
 nc_filename = "./out.nc"
 
-n_replicas = 3 # number of temperature replicas
+n_replicas = 2 # number of temperature replicas
 T_min = 298.0 * u.kelvin # minimum temperature
-T_max = 600.0 * u.kelvin # maximum temperature
+T_max = 300.0 * u.kelvin # maximum temperature
 
 T_i = [ T_min + (T_max - T_min) * (math.exp(float(i) / float(n_replicas-1)) - 1.0) / (math.e - 1.0) for i in range(n_replicas) ]
 

@@ -1,28 +1,13 @@
-#!/usr/local/bin/env python
+#!/usr/bin/env python
 
-import os
-import sys
-import math
-import copy
 import time
-import datetime
 
 import numpy as np
-import numpy.linalg
 
 import simtk.openmm 
 import simtk.unit as units
 
-import netCDF4 as netcdf # netcdf4-python is used in place of scipy.io.netcdf for now
-
-from thermodynamics import ThermodynamicState
-
-#=============================================================================================
-# MODULE CONSTANTS
-#=============================================================================================
-
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
-
 
 def generate_maxwell_boltzmann_velocities(system, temperature):
     """
@@ -83,7 +68,7 @@ default_options["collision_rate"] = 91.0 / units.picosecond
 default_options["constraint_tolerance"] = 1.0e-6 
 default_options["timestep"] = 2.0 * units.femtosecond
 default_options["nsteps_per_iteration"] = 500
-default_options["number_of_iterations"] = 1
+default_options["number_of_iterations"] = 10
 default_options["equilibration_timestep"] = 1.0 * units.femtosecond
 default_options["number_of_equilibration_iterations"] = 1
 default_options["title"] = 'Replica-exchange simulation created using ReplicaExchange class of repex.py on %s' % time.asctime(time.localtime())        

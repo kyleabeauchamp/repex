@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import os
-import sys
 import math
 import copy
 import time
@@ -37,18 +36,18 @@ class NetCDFDatabase(object):
         
         if self.resume: 
             logger.info("Attempting to resume by reading thermodynamic states and options...")
-            self.states = self.load_thermodynamic_states()
+            self.initial_states = self.load_thermodynamic_states()
             self.options = self.load_options()
             self.check_self_consistency(states, coordinates, options)
         else:
-            self.states = states
+            self.initial_states = states
             self.options = process_kwargs(kwargs)
             self.coordinates = coordinates
             self._initialize_netcdf()
 
         # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
-        for state in self.states:
-            if not state.is_compatible_with(self.states[0]):
+        for state in self.initial_states:
+            if not state.is_compatible_with(self.initial_states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
 
         if not self.resume:
@@ -64,9 +63,9 @@ class NetCDFDatabase(object):
         
         """
         
-        self.n_replicas = len(self.states)
+        self.n_replicas = len(self.initial_states)
         self.n_atoms = len(self.coordinates[0])
-        self.n_states = len(self.states)
+        self.n_states = len(self.initial_states)
         assert self.n_replicas == len(self.coordinates), "Error: inconsistent number of replicas."
         
         # Create dimensions.
@@ -120,7 +119,7 @@ class NetCDFDatabase(object):
         ncvar_iteration_time = ncgrp_timings.createVariable('propagate', 'f', ('iteration','replica')) # total time to propagate each replica
         
         # Store thermodynamic states.
-        self._store_thermodynamic_states(self.states)
+        self._store_thermodynamic_states(self.initial_states)
 
         # Store run options
         self._store_options()
@@ -146,7 +145,7 @@ class NetCDFDatabase(object):
         # Store box vectors and volume.
         for replica_index in range(self.n_states):
             state_index = self.replica_states[replica_index]
-            state = self.states[state_index]
+            state = self.initial_states[state_index]
             box_vectors = self.replica_box_vectors[replica_index]
             for i in range(3):
                 self.ncfile.variables['box_vectors'][self.iteration,replica_index,i,:] = (box_vectors[i] / units.nanometers)
@@ -190,15 +189,15 @@ class NetCDFDatabase(object):
         setattr(ncvar_temperatures, 'units', 'K')
         setattr(ncvar_temperatures, 'long_name', "temperatures[state] is the temperature of thermodynamic state 'state'")
         for state_index in range(self.n_states):
-            ncvar_temperatures[state_index] = self.states[state_index].temperature / units.kelvin
+            ncvar_temperatures[state_index] = self.initial_states[state_index].temperature / units.kelvin
 
         # Pressures.
-        if self.states[0].pressure is not None:
+        if self.initial_states[0].pressure is not None:
             ncvar_temperatures = ncgrp_stateinfo.createVariable('pressures', 'f', ('replica',))
             setattr(ncvar_temperatures, 'units', 'atm')
             setattr(ncvar_temperatures, 'long_name', "pressures[state] is the external pressure of thermodynamic state 'state'")
             for state_index in range(self.n_states):
-                ncvar_temperatures[state_index] = self.states[state_index].pressure / units.atmospheres                
+                ncvar_temperatures[state_index] = self.initial_states[state_index].pressure / units.atmospheres                
 
         # TODO: Store other thermodynamic variables store in ThermodynamicState?  Generalize?
                 
@@ -207,7 +206,7 @@ class NetCDFDatabase(object):
         setattr(ncvar_serialized_states, 'long_name', "systems[state] is the serialized OpenMM System corresponding to the thermodynamic state 'state'")
         for state_index in range(self.n_states):
             logger.debug("Serializing state %d..." % state_index)
-            serialized = self.states[state_index].system.__getstate__()
+            serialized = self.initial_states[state_index].system.__getstate__()
             logger.debug("Serialized state is %d B | %.3f KB | %.3f MB" % (len(serialized), len(serialized) / 1024.0, len(serialized) / 1024.0 / 1024.0))
             ncvar_serialized_states[state_index] = serialized
 
@@ -373,13 +372,38 @@ class NetCDFDatabase(object):
         required_keys = ["iteration", "coordinates", "box_vectors", "volumes", "replica_states", "energies", "proposed", "accepted", "time"]
         assert set(required_keys) == set(kwargs.keys()), "Wrong keys provided to output_iteration!"
 
+        iteration = kwargs["iteration"]
+        
         self.ncfile.variables["positions"][iteration] = kwargs["coordinates"]
         self.ncfile.variables['box_vectors'][iteration] = kwargs["box_vectors"]
         self.ncfile.variables['volumes'][iteration] = kwargs["volumes"]    
         self.ncfile.variables['states'][iteration] = kwargs["replica_states"]
-        self.ncfile.variables['energies'][iteration] = kwargs["u_kl"]
-        self.ncfile.variables['proposed'][iteration] = kwargs["Nij_proposed"]
-        self.ncfile.variables['accepted'][iteration] = kwargs["Nij_accepted"]
+        self.ncfile.variables['energies'][iteration] = kwargs["energies"]
+        self.ncfile.variables['proposed'][iteration] = kwargs["proposed"]
+        self.ncfile.variables['accepted'][iteration] = kwargs["accepted"]
         self.ncfile.variables['timestamp'][iteration] = kwargs["time"]
 
         self.ncfile.sync()
+
+    @property
+    def proposed(self):
+        """Proposed moves
+        """
+        return self.ncfile.variables['proposed'][:]
+        
+    @property
+    def accepted(self):
+        """Return accepted moves"""
+        return self.ncfile.variables['accepted'][:]
+
+    @property
+    def states(self):
+        """Return accepted moves"""
+        return self.ncfile.variables['states'][:]
+
+    
+    def finalize(self):
+        logger.warn("WARNING: database finalize() has not yet been implemented.")
+
+    def close(self):
+        logger.warn("WARNING: database close() has not yet been implemented.")
