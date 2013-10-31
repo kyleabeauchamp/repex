@@ -534,8 +534,11 @@ class ReplicaExchange(object):
                 self.Nij_accepted[jstate,istate] += 1
 
     def _mix_all_replicas_weave(self):
-        """
-        Attempt exchanges between all replicas to enhance mixing.
+        """Attempt exchanges between all replicas to enhance mixing.  Uses 'weave'.
+        
+        Notes
+        -----
+        
         Acceleration by 'weave' from scipy is used to speed up mixing by ~ 400x.
         
         """
@@ -612,9 +615,7 @@ class ReplicaExchange(object):
         self.Nij_accepted = Nij_accepted
 
     def _mix_neighboring_replicas(self):
-        """
-        Attempt exchanges between neighboring replicas only.
-
+        """Attempt exchanges between neighboring replicas only.
         """
 
         logger.debug("Will attempt to swap only neighboring replicas.")
@@ -653,9 +654,7 @@ class ReplicaExchange(object):
                 self.Nij_accepted[jstate,istate] += 1
 
     def _mix_replicas(self):
-        """
-        Attempt to swap replicas according to user-specified scheme.
-        
+        """Attempt to swap replicas according to user-specified scheme.
         """
 
         if (self.mpicomm) and (self.mpicomm.rank != 0):
@@ -716,9 +715,7 @@ class ReplicaExchange(object):
 
 
     def _show_mixing_statistics(self):
-        """
-        Print summary of mixing statistics.
-
+        """Print summary of mixing statistics.
         """
 
         # Only root node can print.

@@ -63,12 +63,10 @@ class NetCDFDatabase(object):
         self.thermodynamic_states = self.load_thermodynamic_states()
         self.options = self.load_options()
         
-        self.coordinates, self.replica_box_vectors, self.u_kl, self.iteration = self._resume_from_netcdf()
+        self.coordinates, self.replica_box_vectors, self.u_kl, self.iteration = self._load_last_iteration()
 
     def _initialize_netcdf(self):
-        """
-        Initialize NetCDF file for storage.
-        
+        """Initialize NetCDF file for storage.
         """
         
         self.n_replicas = len(self.thermodynamic_states)
@@ -137,9 +135,7 @@ class NetCDFDatabase(object):
     
     @time_and_print
     def _write_iteration_netcdf(self):
-        """
-        Write positions, states, and energies of current iteration to NetCDF file.
-        
+        """Write positions, states, and energies of current iteration to NetCDF file.
         """
 
         initial_time = time.time()
@@ -178,9 +174,7 @@ class NetCDFDatabase(object):
 
     @time_and_print
     def _store_thermodynamic_states(self, states):
-        """
-        Store the thermodynamic states in a NetCDF file.
-
+        """Store the thermodynamic states in a NetCDF file.
         """
         logger.debug("Storing thermodynamic states in NetCDF file...")
             
@@ -220,10 +214,14 @@ class NetCDFDatabase(object):
 
 
     def load_thermodynamic_states(self):
+        """Return the thermodynamic states from a NetCDF file.
+        
+        Returns
+        -------
+        thermodynamic_states : list
+            List of thermodynamic states for repex.
         """
-        Restore the thermodynamic states from a NetCDF file.
-
-        """
+        
         logging.debug("Restoring thermodynamic states from NetCDF file...")
            
         # Make sure this NetCDF file contains thermodynamic state information.
@@ -237,7 +235,7 @@ class NetCDFDatabase(object):
         n_states = int(ncgrp_stateinfo.variables['n_states'][0])
 
         # Read state information.
-        states = list()
+        thermodynamic_states = list()
         for state_index in range(n_states):
             # Populate a new ThermodynamicState object.
             state = ThermodynamicState()
@@ -250,14 +248,12 @@ class NetCDFDatabase(object):
             state.system = mm.System() 
             state.system.__setstate__(str(ncgrp_stateinfo.variables['systems'][state_index]))
             # Store state.
-            states.append(state)
+            thermodynamic_states.append(state)
         
-        return states
+        return thermodynamic_states
 
     def _store_options(self):
-        """
-        Store run parameters in NetCDF file.
-
+        """Store run parameters in NetCDF file.
         """
 
         logger.debug("Storing run parameters in NetCDF file...")
@@ -335,8 +331,25 @@ class NetCDFDatabase(object):
             
         return options
 
-    def _resume_from_netcdf(self):
-        """Resume execution by reading current positions and energies from a NetCDF file."""
+    def _load_last_iteration(self):
+        """Return data from the last iteration saved in a database.
+        
+        Returns
+        -------
+        
+        replica_coordinates : list
+            The coordinates of each replica
+        replica_box_vectors : list
+            The box vectors of each replica
+        u_kl : np.ndarray
+            Energies of each replica in each state
+        iteration : int
+            The current iteration
+        
+        Notes
+        -----
+        u_kl is current not used by the Repex object.        
+        """
 
         # TODO: Perform sanity check on file before resuming
 
