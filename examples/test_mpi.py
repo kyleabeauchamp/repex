@@ -1,3 +1,4 @@
+from mpi4py import MPI # MPI wrapper
 import numpy as np
 import simtk.unit as u
 from simtk.openmm import app
@@ -40,7 +41,7 @@ coordinates = [model.getPositions()] * n_replicas
 #database = repex.netcdf_io.NetCDFDatabase(nc_filename, states, coordinates)
 
 #replica_exchange = ReplicaExchange(states, coordinates, nc_filename)
-#replica_exchange = ReplicaExchange.create_repex(states, coordinates, nc_filename, **{})
-replica_exchange = ReplicaExchange.resume_repex(nc_filename, **{})
+#replica_exchange = ReplicaExchange.create_repex(states, coordinates, nc_filename,  mpicomm=MPI.COMM_WORLD, **{})
+replica_exchange = ReplicaExchange.resume_repex(nc_filename, mpicomm=MPI.COMM_WORLD, **{})
 replica_exchange.number_of_iterations = 20
 replica_exchange.run()
