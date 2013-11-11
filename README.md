@@ -3,14 +3,16 @@ Repex
 
 Replica Exchange
 
-
 Replica-exchange simulation algorithms and specific variants.
 
 DESCRIPTION
 
-This module provides a general facility for running replica-exchange simulations, as well as
+This package provides a general facility for running replica-exchange simulations, as well as
 derived classes for special cases such as parallel tempering (in which the states differ only
 in temperature) and Hamiltonian exchange (in which the state differ only by potential function).
+
+This package also provides a number of utilities and tests that are required
+for Yank and other OpenMM-based projects.
 
 Provided classes include:
 

@@ -56,7 +56,7 @@ setup(name='repex',
       long_description="\n".join(DOCLINES[2:]),
       version=__version__,
       license='GPLv3+',
-      url='http://github.com/ChoderaLab/repex',
+      url='http://github.com/ChoderaLab/Repex',
       platforms=['Linux', 'Mac OS-X', 'Unix'],
       classifiers=CLASSIFIERS.splitlines(),
       packages=["repex"],
@@ -65,6 +65,6 @@ setup(name='repex',
       zip_safe=False,
       scripts=[],
       ext_modules=extensions,
-      #package_data={'mdtraj.pdb': ['data/*'], 'mdtraj.testing': ['reference/*']},
+      package_data={'repex': ['data/*/*']},  # Install all data directories of the form testsystems/data/X/
       **setup_kwargs
       )
