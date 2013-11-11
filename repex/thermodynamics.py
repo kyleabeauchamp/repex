@@ -36,6 +36,9 @@ import numpy.linalg
 import simtk.openmm 
 import simtk.unit as units
 
+import logging
+logger = logging.getLogger(__name__)
+
 #=============================================================================================
 # REVISION CONTROL
 #=============================================================================================
@@ -60,9 +63,9 @@ class ThermodynamicState(object):
 
     Specify an NVT state for a water box at 298 K.
 
-    >>> import simtk.unit as units
-    >>> import simtk.pyopenmm.extras.testsystems as testsystems
-    >>> [system, coordinates] = testsystems.WaterBox()    
+    >>> from repex import testsystems
+    >>> system_container = testsystems.WaterBox()        
+    >>> (system, positions) = system_container.system, system_container.positions
     >>> state = ThermodynamicState(system=system, temperature=298.0*units.kelvin)
 
     Specify an NPT state at 298 K and 1 atm pressure.
@@ -156,8 +159,8 @@ class ThermodynamicState(object):
             #if platform and (platform != self._context.getPlatform()): # TODO: Figure out why requested and cached platforms differed in tests.
             if platform and (platform.getName() != self._context.getPlatform().getName()): # DEBUG: Only compare Platform names for now; change this later to incorporate GPU IDs.
                 # Platform differs from the one requested; destroy it.
-                print (platform.getName(), self._context.getPlatform().getName())
-                print "Platform differs from the one requested; destroying and recreating..." # DEBUG
+                logger.info((platform.getName(), self._context.getPlatform().getName()))
+                logger.debug("Platform differs from the one requested; destroying and recreating...")
                 del self._context, self._integrator
             else:
                 # Cached context is what we expect; do nothing.
@@ -173,9 +176,8 @@ class ThermodynamicState(object):
         else:
             self._context = self._mm.Context(self.system, self._integrator)
             
-        print "_create_context created a new integrator and context" # DEBUG
+        logger.debug("_create_context created a new integrator and context")
 
-        return
 
     def _cleanup_context(self):
         del self._context, self._integrator
@@ -213,25 +215,27 @@ class ThermodynamicState(object):
 
         Compute the reduced potential of a Lennard-Jones cluster at 100 K.
         
-        >>> import simtk.unit as units
-        >>> import simtk.pyopenmm.extras.testsystems as testsystems
-        >>> [system, coordinates] = testsystems.LennardJonesCluster()
+        >>> from repex import testsystems
+        >>> system_container = testsystems.LennardJonesCluster()
+        >>> (system, positions) = system_container.system, system_container.positions
         >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin)
-        >>> potential = state.reduced_potential(coordinates)
+        >>> potential = state.reduced_potential(positions)
     
         Compute the reduced potential of a Lennard-Jones fluid at 100 K and 1 atm.
 
-        >>> [system, coordinates] = testsystems.LennardJonesFluid()
+        >>> system_container = testsystems.LennardJonesFluid()
+        >>> (system, positions) = system_container.system, system_container.positions
         >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin, pressure=1.0*units.atmosphere)
         >>> box_vectors = system.getDefaultPeriodicBoxVectors()
-        >>> potential = state.reduced_potential(coordinates, box_vectors)
+        >>> potential = state.reduced_potential(positions, box_vectors)
 
         Compute the reduced potential of a water box at 298 K and 1 atm.
 
-        >>> [system, coordinates] = testsystems.WaterBox()
+        >>> system_container = testsystems.WaterBox()
+        >>> (system, positions) = system_container.system, system_container.positions
         >>> state = ThermodynamicState(system=system, temperature=298.0*units.kelvin, pressure=1.0*units.atmosphere)
         >>> box_vectors = system.getDefaultPeriodicBoxVectors()
-        >>> potential = state.reduced_potential(coordinates, box_vectors)
+        >>> potential = state.reduced_potential(positions, box_vectors)
     
         NOTES
 
@@ -276,7 +280,7 @@ class ThermodynamicState(object):
         try:
             potential_energy = self._compute_potential(coordinates, box_vectors)
         except Exception as e:
-            print e # DEBUG
+            logger.info(e)
 
             # Our cached context failed, so try deleting it and creating it anew.
             self._cleanup_context()
@@ -321,12 +325,13 @@ class ThermodynamicState(object):
         Compute the reduced potential of a Lennard-Jones cluster at multiple configurations at 100 K.
         
         >>> import simtk.unit as units
-        >>> import simtk.pyopenmm.extras.testsystems as testsystems
-        >>> [system, coordinates] = testsystems.LennardJonesCluster()
+        >>> from repex import testsystems
+        >>> system_container = testsystems.LennardJonesCluster()
+        >>> (system, positions) = system_container.system, system_container.positions
         >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin)
         >>> # create example list of coordinates
         >>> import copy
-        >>> coordinates_list = [ copy.deepcopy(coordinates) for i in range(10) ]
+        >>> coordinates_list = [ copy.deepcopy(positions) for i in range(10) ]
         >>> # compute potential for all sets of coordinates
         >>> potentials = state.reduced_potential_multiple(coordinates_list)
 
@@ -411,9 +416,9 @@ class ThermodynamicState(object):
 
         Create NVT and NPT states.
         
-        >>> import simtk.unit as units
-        >>> import simtk.pyopenmm.extras.testsystems as testsystems
-        >>> [system, coordinates] = testsystems.LennardJonesCluster()
+        >>> from repex import testsystems
+        >>> system_container = testsystems.LennardJonesCluster()
+        >>> (system, positions) = system_container.system, system_container.positions
         >>> nvt_state = ThermodynamicState(system=system, temperature=100.0*units.kelvin)
         >>> npt_state = ThermodynamicState(system=system, temperature=100.0*units.kelvin, pressure=1.0*units.atmospheres)
 
@@ -450,8 +455,9 @@ class ThermodynamicState(object):
         Create an NVT state.
         
         >>> import simtk.unit as units
-        >>> import simtk.pyopenmm.extras.testsystems as testsystems
-        >>> [system, coordinates] = testsystems.LennardJonesCluster()
+        >>> from repex import testsystems
+        >>> system_container = testsystems.LennardJonesCluster()
+        >>> (system, positions) = system_container.system, system_container.positions
         >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin)
 
         Return a representation of the state.
@@ -486,8 +492,9 @@ class ThermodynamicState(object):
         
         Compute the volume of a Lennard-Jones fluid at 100 K and 1 atm.
 
-        >>> import simtk.pyopenmm.extras.testsystems as testsystems
-        >>> [system, coordinates] = testsystems.LennardJonesFluid()
+        >>> from repex import testsystems
+        >>> system_container = testsystems.LennardJonesFluid()        
+        >>> (system, positions) = system_container.system, system_container.positions
         >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin, pressure=1.0*units.atmosphere)
         >>> box_vectors = system.getDefaultPeriodicBoxVectors()
         >>> volume = state._volume(box_vectors)

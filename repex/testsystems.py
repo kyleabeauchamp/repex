@@ -14,8 +14,8 @@ EXAMPLES
 
 Create a 3D harmonic oscillator.
 
->>> import test_systems
->>> ho = test_systems.HarmonicOscillator()
+>>> import testsystems
+>>> ho = testsystems.HarmonicOscillator()
 >>> system, positions = ho.system, ho.positions
 
 See list of methods for a complete list of provided test systems.
