@@ -1,4 +1,4 @@
-Repex
+repex
 =====
 
 Replica Exchange

@@ -1,4 +1,4 @@
-"""Repex: a python mpi-enabled replica exchange driver.
+"""repex: a python mpi-enabled replica exchange driver.
 
 """
 
@@ -56,7 +56,7 @@ setup(name='repex',
       long_description="\n".join(DOCLINES[2:]),
       version=__version__,
       license='GPLv3+',
-      url='http://github.com/ChoderaLab/Repex',
+      url='http://github.com/ChoderaLab/repex',
       platforms=['Linux', 'Mac OS-X', 'Unix'],
       classifiers=CLASSIFIERS.splitlines(),
       packages=["repex"],
