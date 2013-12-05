@@ -204,6 +204,15 @@ class TestSystem(object):
         """A list of available analytical properties, accessible via 'get_propertyname(thermodynamic_state)' calls."""
         return [ method[4:] for method in dir(self) if (method[0:4]=='get_') ]
 
+    def get_reduced_potential_expectation(self, state_from, state_evaluated):
+        """Calculate the expected potential energy in state_from, divided by kB * T in state_evaluated."""
+        if hasattr(self, "get_potential_expectation"):
+            U = self.get_potential_expectation(state_from)
+            U_red = U / (kB * state_evaluated.temperature)
+            return U_red
+        else:
+            raise AttributeError("Cannot return reduced potential energy because system lacks get_potential_expectation")
+
     def serialize(self):
         """Return the System and positions in serialized XML form.
 
