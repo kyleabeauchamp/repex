@@ -164,8 +164,8 @@ class ReplicaExchange(object):
         self.replica_states     = np.zeros([self.n_states], np.int32) # replica_states[i] is the state that replica i is currently at
         self.u_kl               = np.zeros([self.n_states, self.n_states], np.float32)        
         self.swap_Pij_accepted  = np.zeros([self.n_states, self.n_states], np.float32)
-        self.Nij_proposed       = np.zeros([self.n_states,self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
-        self.Nij_accepted       = np.zeros([self.n_states,self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
+        self.Nij_proposed       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
+        self.Nij_accepted       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
 
         self.replica_coordinates = [ copy.deepcopy(self.provided_coordinates[replica_index % len(self.provided_coordinates)]) for replica_index in range(self.n_states) ]
 
@@ -714,6 +714,7 @@ class ReplicaExchange(object):
         logger.debug("Mixing of replicas took %.3f s" % (end_time - start_time))
 
     def _accumulate_mixing_statistics(self):
+        """Compute this mixing statistics (Tij)."""
         if hasattr(self, "_Nij"):
             return self._accumulate_mixing_statistics_update()
         else:
