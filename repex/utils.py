@@ -7,6 +7,8 @@ import numpy as np
 import simtk.openmm 
 import simtk.unit as units
 
+from mdtraj.utils import ensure_type
+
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
 
 def generate_maxwell_boltzmann_velocities(system, temperature):
@@ -97,3 +99,19 @@ def process_kwargs(kwargs):
             options[key] = kwargs[key]
 
     return options
+
+
+def permute_energies(X, s):
+    """Re-order an observable X so that u[i, j, k] correponds to frame i, sampled from state j, evaluated in state k."""
+    X = ensure_type(X, 'float32', 3, "X")
+    n_iter, n_replicas, n_replicas = X.shape
+    s = ensure_type(s, "int", 2, "s", shape=(n_iter, n_replicas))
+    
+    u = np.zeros((n_iter, n_replicas, n_replicas))
+    for i, si in enumerate(s):
+        mapping = dict(zip(range(n_replicas), si))
+        inv_map = {v:k for k, v in mapping.items()}
+        si_inv = [inv_map[k] for k in range(n_replicas)]
+        u[i] = X[i, si_inv]
+    
+    return u

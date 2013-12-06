@@ -53,6 +53,7 @@ import numpy as np
 import numpy.random
 import math
 import copy
+import scipy.special
 
 import simtk
 import simtk.openmm as mm
@@ -204,11 +205,11 @@ class TestSystem(object):
         """A list of available analytical properties, accessible via 'get_propertyname(thermodynamic_state)' calls."""
         return [ method[4:] for method in dir(self) if (method[0:4]=='get_') ]
 
-    def get_reduced_potential_expectation(self, state_from, state_evaluated):
-        """Calculate the expected potential energy in state_from, divided by kB * T in state_evaluated."""
+    def get_reduced_potential_expectation(self, state_sampled_from, state_evaluated_in):
+        """Calculate the expected potential energy in state_sampled_from, divided by kB * T in state_evaluated_in."""
         if hasattr(self, "get_potential_expectation"):
-            U = self.get_potential_expectation(state_from)
-            U_red = U / (kB * state_evaluated.temperature)
+            U = self.get_potential_expectation(state_sampled_from)
+            U_red = U / (kB * state_evaluated_in.temperature)
             return U_red
         else:
             raise AttributeError("Cannot return reduced potential energy because system lacks get_potential_expectation")
@@ -375,8 +376,97 @@ class HarmonicOscillator(TestSystem):
 
         return (3./2.) * kB * state.temperature
 
+class PowerOscillator(TestSystem):
+    """Create a 3D Power oscillator, with a single particle confined in an isotropic x^b well.
+
+    Parameters
+    ----------
+    K : simtk.unit.Quantity, optional, default=100.0
+        harmonic restraining potential.  The units depend on the power, 
+        so we accept unitless inputs and add units of the form 
+        units.kilocalories_per_mole / units.angstrom ** b
+    mass : simtk.unit.Quantity, optional, default=39.948 * units.amu
+        particle mass
+    
+    Attributes
+    ----------
+    system : simtk.openmm.System
+        Openmm system with the harmonic oscillator
+    positions : list
+        positions of harmonic oscillator
+
+    Notes
+    -----
+
+    Here we assume a potential energy of the form U(x) = k * x^b.  
+
+    By the generalized equipartition theorem, the expectation of the 
+    potential energy is 3 kT / b.
+    
+    """
+    
+    def __init__(self, K=100.0, b=2.0, mass=39.948 * units.amu, **kwargs):
+
+        TestSystem.__init__(self, kwargs)
+        
+        K = K * units.kilocalories_per_mole / units.angstroms ** b
+
+        # Create an empty system object.
+        system = mm.System()
+
+        # Add the particle to the system.
+        system.addParticle(mass)
+
+        # Set the positions.
+        positions = units.Quantity(np.zeros([1,3], np.float32), units.angstroms)
+
+        # Add a restrining potential centered at the origin.
+        force = mm.CustomExternalForce('(K) * (x^%d + y^%d + z^%d)' %(b, b, b))
+        force.addGlobalParameter('K', K)
+        force.addParticle(0, [])
+        system.addForce(force)
+        
+        self.K, self.mass = K, mass
+        self.b = b
+        self.system, self.positions = system, positions
+        
+        # Number of degrees of freedom.
+        self.ndof = 3
+
+    def get_potential_expectation(self, state):
+        """Return the expectation of the potential energy, computed analytically or numerically.
+
+        Arguments
+        ---------
+        
+        state : ThermodynamicState with temperature defined
+            The thermodynamic state at which the property is to be computed.
+        
+        Returns
+        -------
+        
+        potential_mean : simtk.unit.Quantity compatible with simtk.unit.kilojoules_per_mole
+            The expectation of the potential energy.
+        
+        """
+
+        return (3.) * kB * state.temperature / self.b
+
+    def _get_power_expectation(self, state, n):
+        """Return the power of x^n.  Not currently used"""
+        b = 1.0 * self.b
+        beta = (1.0 * kB * state.temperature) ** -1.
+        gamma = scipy.special.gamma
+        return (self.K * beta) ** (-n / b) * gamma((n + 1.) / b) / gamma(1. / b)
+
+    @classmethod
+    def reduced_potential(cls, beta, a, b, a2, b2):
+        gamma = scipy.special.gamma
+        reduced_u = 3 * a2 * (a * beta) ** (-b2 / b) * gamma((b2 + 1.) / b) / gamma(1. / b) * beta
+        return reduced_u
+
 #=============================================================================================
-# Diatomi molecule
+# Diatomic molecule
 #=============================================================================================
 
 class Diatom(TestSystem):

@@ -57,7 +57,9 @@ class HamiltonianExchange(ReplicaExchange):
     
     """
 
-    def __init__(self, reference_state, systems, coordinates, store_filename, protocol=None, mm=None, mpicomm=None, metadata=None):
+    @classmethod
+    def create_repex(cls, reference_state, systems, coordinates, filename, mpicomm=None, **kwargs):
+
         """
         Initialize a Hamiltonian exchange simulation object.
 
@@ -74,19 +76,6 @@ class HamiltonianExchange(ReplicaExchange):
         mpicomm (mpi4py communicator) - MPI communicator, if parallel execution is desired (default: None)        
 
         """
-
-        if systems is None:
-            states = None
-        else:
-            # Create thermodynamic states from systems.        
-            states = [ ThermodynamicState(system=system, temperature=reference_state.temperature, pressure=reference_state.pressure, mm=mm) for system in systems ]
-
-        # Initialize replica-exchange simlulation.
-        ReplicaExchange.__init__(self, states, coordinates, store_filename, protocol=protocol, mm=mm, mpicomm=mpicomm, metadata=metadata)
-
-        # Override title.
-        self.title = 'Hamiltonian exchange simulation created using HamiltonianExchange class of repex.py on %s' % time.asctime(time.localtime())
-        
-        return
-
-    
+      
+        thermodynamic_states = [ ThermodynamicState(system=system, temperature=reference_state.temperature, pressure=reference_state.pressure) for system in systems ]
+        return super(cls, HamiltonianExchange).create_repex(thermodynamic_states, coordinates, filename, mpicomm=mpicomm, **kwargs)
