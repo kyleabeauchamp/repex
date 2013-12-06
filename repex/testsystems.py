@@ -402,6 +402,11 @@ class Diatom(TestSystem):
 
     >>> diatom = Diatom()
     >>> system, positions = diatom.system, diatom.positions
+
+    Create a Diatom with constraint in a central potential
+    >>> diatom = Diatom(constraint=True, use_central_potential=True)
+    >>> system, positions = diatom.system, diatom.positions
+
     """
 
     def __init__(self, 
@@ -436,7 +441,7 @@ class Diatom(TestSystem):
             # Add a central restraining potential.
             Kcentral = 1.0 * units.kilocalories_per_mole / units.nanometer**2
             force = mm.CustomExternalForce('(Kcentral/2.0) * (x^2 + y^2 + z^2)')
-            force.addGlobalParameter('K', Kcentral)
+            force.addGlobalParameter('Kcentral', Kcentral)
             force.addParticle(0, [])
             force.addParticle(1, [])    
             system.addForce(force)
