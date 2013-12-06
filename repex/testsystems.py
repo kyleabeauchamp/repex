@@ -1503,6 +1503,40 @@ class WaterBox(TestSystem):
         self.system, self.positions = system, positions
 
 #=============================================================================================
+# Alanine dipeptide in vacuum.
+#=============================================================================================
+
+class AlanineDipeptideVacuum(TestSystem):
+    """Alanine dipeptide ff96 in vacuum.
+    
+    Parameters
+    ----------
+    constraints : optional, default=simtk.openmm.app.HBonds
+    
+    Examples
+    --------
+    
+    Create alanine dipeptide with constraints on bonds to hydrogen
+    >>> alanine = AlanineDipeptideVacuum()
+    >>> (system, positions) = alanine.system, alanine.positions
+    """
+
+    def __init__(self, constraints=app.HBonds):
+
+        # Determine prmtop and crd filenames in test directory.
+        # TODO: This will need to be revised in order to be able to find the test systems.
+        prmtop_filename = os.path.join(os.path.dirname(__file__), 'data', 'alanine-dipeptide-gbsa', 'alanine-dipeptide.prmtop')
+        crd_filename = os.path.join(os.path.dirname(__file__), 'data', 'alanine-dipeptide-gbsa', 'alanine-dipeptide.crd')
+
+        prmtop = app.AmberPrmtopFile(prmtop_filename)
+        system = prmtop.createSystem(implicitSolvent=None, constraints=constraints, nonbondedCutoff=None)
+
+        # Read positions.
+        inpcrd = app.AmberInpcrdFile(crd_filename)
+        positions = inpcrd.getPositions(asNumpy=True)
+
+        self.system, self.positions = system, positions
+#=============================================================================================
 # Alanine dipeptide in implicit solvent.
 #=============================================================================================
 
@@ -1511,17 +1545,17 @@ class AlanineDipeptideImplicit(TestSystem):
     
     Parameters
     ----------
-    flexibleConstraints : bool, optional, default=True
-    shake : string, optional, default="h-bonds"
+    constraints : optional, default=simtk.openmm.app.HBonds
     
     Examples
     --------
     
+    Create alanine dipeptide with constraints on bonds to hydrogen
     >>> alanine = AlanineDipeptideImplicit()
     >>> (system, positions) = alanine.system, alanine.positions
     """
 
-    def __init__(self, flexibleConstraints=True, shake='h-bonds'):
+    def __init__(self, constraints=app.HBonds):
 
         # Determine prmtop and crd filenames in test directory.
         # TODO: This will need to be revised in order to be able to find the test systems.
@@ -1531,7 +1565,7 @@ class AlanineDipeptideImplicit(TestSystem):
         # Initialize system.
         
         prmtop = app.AmberPrmtopFile(prmtop_filename)
-        system = prmtop.createSystem(implicitSolvent=app.OBC1, constraints=app.HBonds, nonbondedCutoff=None)
+        system = prmtop.createSystem(implicitSolvent=app.OBC1, constraints=constraints, nonbondedCutoff=None)
 
         # Read positions.
         inpcrd = app.AmberInpcrdFile(crd_filename)
@@ -1548,8 +1582,8 @@ class AlanineDipeptideExplicit(TestSystem):
     
     Parameters
     ----------
-    flexibleConstraints : bool, optional, default=True
-    shake : string, optional, default="h-bonds"
+    constraints : optional, default=simtk.openmm.app.HBonds
+    rigid_water : bool, optional, default=True
     nonbondedCutoff : Quantity, optional, default=9.0 * units.angstroms
     use_dispersion_correction : bool, optional, default=True
         If True, the long-range disperson correction will be used.
@@ -1561,7 +1595,7 @@ class AlanineDipeptideExplicit(TestSystem):
     >>> (system, positions) = alanine.system, alanine.positions
     """
 
-    def __init__(self, flexibleConstraints=True, shake='h-bonds', nonbondedCutoff=9.0 * units.angstroms, use_dispersion_correction=True):
+    def __init__(self, constraints=app.HBonds, rigid_water=True, nonbondedCutoff=9.0 * units.angstroms, use_dispersion_correction=True):
 
         # Determine prmtop and crd filenames in test directory.
         # TODO: This will need to be revised in order to be able to find the test systems.
@@ -1571,7 +1605,7 @@ class AlanineDipeptideExplicit(TestSystem):
         # Initialize system.
         
         prmtop = app.AmberPrmtopFile(prmtop_filename)
-        system = prmtop.createSystem(constraints=app.HBonds, nonbondedMethod=app.PME, rigidWater=True, nonbondedCutoff=0.9*units.nanometer)
+        system = prmtop.createSystem(constraints=constraints, nonbondedMethod=app.PME, rigidWater=rigid_water, nonbondedCutoff=0.9*units.nanometer)
 
         # Set dispersion correction use.
         forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
