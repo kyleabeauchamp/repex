@@ -308,7 +308,7 @@ def HMCIntegrator(timestep, temperature=298.0*units.kelvin, nsteps=10):
 
     return integrator
 
-def GHMCIntegrator(timestep, temperature=298.0*units.kelvin, gamma=50.0/units.picoseconds):
+def GHMCIntegrator(timestep, temperature=298.0*units.kelvin, collision_rate=50.0/units.picoseconds):
     """
     Create a generalized hybrid Monte Carlo (GHMC) integrator.
     
@@ -316,8 +316,8 @@ def GHMCIntegrator(timestep, temperature=298.0*units.kelvin, gamma=50.0/units.pi
 
     timestep (numpy.unit.Quantity compatible with femtoseconds) - the integration timestep
     temperature (numpy.unit.Quantity compatible with kelvin) - the temperature
-    gamma (numpy.unit.Quantity compatible with 1/picoseconds) - the collision rate
-
+    collision_rate (numpy.unit.Quantity compatible with 1/picoseconds) - the collision rate
+    
     RETURNS
 
     integrator (simtk.openmm.CustomIntegrator) - a GHMC integrator
@@ -337,7 +337,8 @@ def GHMCIntegrator(timestep, temperature=298.0*units.kelvin, gamma=50.0/units.pi
     """
 
     kT = kB * temperature
-        
+    gamma = collision_rate
+
     integrator = openmm.CustomIntegrator(timestep)
 
     integrator.addGlobalVariable("kT", kB*temperature) # thermal energy
@@ -404,7 +405,7 @@ def GHMCIntegrator(timestep, temperature=298.0*units.kelvin, gamma=50.0/units.pi
 
     return integrator
 
-def VVVRIntegrator(timestep, temperature=298.0*units.kelvin, gamma=50.0/units.picoseconds):
+def VVVRIntegrator(timestep, temperature=298.0*units.kelvin, collision_rate=50.0/units.picoseconds):
     """
     Create a velocity verlet with velocity randomization (VVVR) integrator.
     
@@ -412,7 +413,7 @@ def VVVRIntegrator(timestep, temperature=298.0*units.kelvin, gamma=50.0/units.pi
 
     timestep (numpy.unit.Quantity compatible with femtoseconds) - the integration timestep
     temperature (numpy.unit.Quantity compatible with kelvin) - the temperature
-    gamma (numpy.unit.Quantity compatible with 1/picoseconds) - the collision rate
+    collision_rate (numpy.unit.Quantity compatible with 1/picoseconds) - the collision rate
 
     RETURNS
 
@@ -434,25 +435,15 @@ def VVVRIntegrator(timestep, temperature=298.0*units.kelvin, gamma=50.0/units.pi
     """
 
     kT = kB * temperature
+    gamma = collision_rate
     
     integrator = openmm.CustomIntegrator(timestep)
     
     integrator.addGlobalVariable("kT", kT) # thermal energy
     integrator.addGlobalVariable("b", numpy.exp(-gamma*timestep)) # velocity mixing parameter
     integrator.addPerDofVariable("sigma", 0) 
-    integrator.addGlobalVariable("ke_old", 0) # kinetic energy
-    integrator.addGlobalVariable("ke_new", 0) # kinetic energy
-    integrator.addGlobalVariable("ke", 0) # kinetic energy
-    integrator.addGlobalVariable("Eold", 0) # old energy
-    integrator.addGlobalVariable("Enew", 0) # new energy
-    integrator.addGlobalVariable("accept", 0) # accept or reject
-    integrator.addGlobalVariable("naccept", 0) # number accepted
-    integrator.addGlobalVariable("ntrials", 0) # number of Metropolization trials
     integrator.addPerDofVariable("x1", 0) # position before application of constraints
 
-    integrator.addGlobalVariable("pseudowork", 0) # accumulated pseudowork
-    integrator.addGlobalVariable("heat", 0) # accumulated heat
-    
     #
     # Allow context updating here.
     #
@@ -468,41 +459,24 @@ def VVVRIntegrator(timestep, temperature=298.0*units.kelvin, gamma=50.0/units.pi
     # 
     # Velocity perturbation.
     #
-    integrator.addComputeSum("ke_old", "0.5*m*v*v")    
     integrator.addComputePerDof("v", "sqrt(b)*v + sqrt(1-b)*sigma*gaussian")
     integrator.addConstrainVelocities();
-    integrator.addComputeSum("ke_new", "0.5*m*v*v")
-    integrator.addComputeGlobal("heat", "heat + (ke_new - ke_old)")    
     
     #
     # Metropolized symplectic step.
     #
-    integrator.addComputeSum("ke", "0.5*m*v*v")
-    integrator.addComputeGlobal("Eold", "ke + energy")
     integrator.addComputePerDof("v", "v + 0.5*dt*f/m")
     integrator.addComputePerDof("x", "x + v*dt")
     integrator.addComputePerDof("x1", "x")
     integrator.addConstrainPositions();
     integrator.addComputePerDof("v", "v + 0.5*dt*f/m + (x-x1)/dt")
     integrator.addConstrainVelocities();
-    integrator.addComputeSum("ke", "0.5*m*v*v")
-    integrator.addComputeGlobal("Enew", "ke + energy")
-
-    #
-    # Accumulate statistics.
-    #
-    integrator.addComputeGlobal("pseudowork", "pseudowork + (Enew-Eold)") # accumulate pseudowork
-    integrator.addComputeGlobal("naccept", "naccept + 1")
-    integrator.addComputeGlobal("ntrials", "ntrials + 1")   
 
     #
     # Velocity randomization
     #
-    integrator.addComputeSum("ke_old", "0.5*m*v*v")
     integrator.addComputePerDof("v", "sqrt(b)*v + sqrt(1-b)*sigma*gaussian")
     integrator.addConstrainVelocities();
-    integrator.addComputeSum("ke_new", "0.5*m*v*v")
-    integrator.addComputeGlobal("heat", "heat + (ke_new - ke_old)")    
 
     return integrator
     
@@ -710,16 +684,17 @@ def statisticalInefficiency(A_n, B_n=None, fast=False, mintime=3):
 timestep = 1.0 * units.femtosecond
 temperature = 298.0 * units.kelvin
 kT = kB * temperature
-friction = 20.0 / units.picosecond
+collision_rate = 20.0 / units.picosecond
 tolerance = 1.0e-8 # constraint tolerance
 
 nsteps = 1000 # number of timesteps per iteration
 nequil = 50 # number of equilibration iterations
-niterations = 200 # number of production iterations
+niterations = 100 # number of production iterations
 
 # Select system:
 #testsystem = testsystems.MolecularIdealGas()
-testsystem = testsystems.AlanineDipeptideVacuum(constraints=None)
+#testsystem = testsystems.AlanineDipeptideVacuum(constraints=None)
+testsystem = testsystems.AlanineDipeptideVacuum(constraints=app.HBonds)
 #testsystem = testsystems.AlanineDipeptideImplicit(constraints=app.HBonds)
 #testsystem = testsystems.AlanineDipeptideExplicit(constraints=app.HBonds, rigid_water=True)
 #testsystem = testsystems.Diatom(constraint=True, use_central_potential=True)
@@ -736,22 +711,27 @@ testsystem = testsystems.AlanineDipeptideVacuum(constraints=None)
 ndof = 3*system.getNumParticles() - system.getNumConstraints()
 
 # Select integrator:
-#integrator = openmm.LangevinIntegrator(temperature, friction, timestep)
+#integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
 #integrator = AndersenVelocityVerletIntegrator(temperature, timestep)
 #integrator = MetropolisMonteCarloIntegrator(timestep, temperature=temperature)
 #integrator = HMCIntegrator(timestep, temperature=temperature)
-#integrator = VVVRIntegrator(timestep, temperature=temperature)
-#integrator = GHMCIntegrator(timestep, temperature=temperature)
+integrator = VVVRIntegrator(timestep, temperature=temperature, collision_rate=collision_rate)
+#integrator = GHMCIntegrator(timestep, temperature=temperature, collision_rate=collision_rate)
 #integrator = VelocityVerletIntegrator(timestep)
-integrator = openmm.VerletIntegrator(timestep)
+#integrator = openmm.VerletIntegrator(timestep)
+
+# Use default constraint tolerance.
+#tolerance = integrator.getConstraintTolerance()
 
 # Set constraint tolerance
 integrator.setConstraintTolerance(tolerance)
 
 # Select platform manually.
-platform_name = 'Reference'
+platform_name = 'CUDA'
 platform = openmm.Platform.getPlatformByName(platform_name)
-options = {"OpenCLPrecision": "double", "CudaPrecision": "double"}
+#options = {"OpenCLPrecision": "double", "CudaPrecision": "double"}
+#options = {"OpenCLPrecision": "single", "CudaPrecision": "single"}
+options = {"OpenCLPrecision": "mixed", "CudaPrecision": "mixed"}
 
 # Create Context and set positions and velocities.
 context = openmm.Context(system, integrator, platform, options)
@@ -783,9 +763,10 @@ for iteration in range(niterations):
     print "iteration %d / %d : propagating for %d steps..." % (iteration, niterations, nsteps)
 
     # Assign velocities.
-    context.setVelocitiesToTemperature(temperature)
-    context.applyConstraints(tolerance)
-    context.applyVelocityConstraints(tolerance)
+    #context.setVelocitiesToTemperature(temperature)
+    #context.applyConstraints(tolerance)
+    #context.applyVelocityConstraints(tolerance)
+    #integrator.step(1)
 
     state = context.getState(getEnergy=True)
     initial_potential_energy = state.getPotentialEnergy()
