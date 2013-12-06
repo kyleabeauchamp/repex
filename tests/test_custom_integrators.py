@@ -44,6 +44,7 @@ import time
 
 import simtk.unit as units
 import simtk.openmm as openmm
+from simtk.openmm import app
 
 from repex import testsystems
 
@@ -710,17 +711,23 @@ timestep = 1.0 * units.femtosecond
 temperature = 298.0 * units.kelvin
 kT = kB * temperature
 friction = 20.0 / units.picosecond
+tolerance = 1.0e-8 # constraint tolerance
 
-nsteps = 1000
-niterations = 100
+nsteps = 1000 # number of timesteps per iteration
+nequil = 50 # number of equilibration iterations
+niterations = 200 # number of production iterations
 
 # Select system:
 #testsystem = testsystems.MolecularIdealGas()
-testsystem = testsystems.AlanineDipeptideImplicit(flexibleConstraints=False, shake=True)
+testsystem = testsystems.AlanineDipeptideVacuum(constraints=None)
+#testsystem = testsystems.AlanineDipeptideImplicit(constraints=app.HBonds)
+#testsystem = testsystems.AlanineDipeptideExplicit(constraints=app.HBonds, rigid_water=True)
+#testsystem = testsystems.Diatom(constraint=True, use_central_potential=True)
+#testsystem = testsystems.ConstraintCoupledHarmonicOscillator()
 #testsystem = testsystems.LysozymeImplicit(flexibleConstraints=False, shake=True)
 #testsystem = testsystems.HarmonicOscillator()
 #testsystem = testsystems.HarmonicOscillatorArray(N=16)
-#testsystem = testsystems.AlanineDipeptideExplicit(flexibleConstraints=False, shake=True)
+#testsystem = testsystems.WaterBox(constrain=True, flexible=False)
 
 # Retrieve system and positions.
 [system, positions] = [testsystem.system, testsystem.positions]
@@ -735,23 +742,36 @@ ndof = 3*system.getNumParticles() - system.getNumConstraints()
 #integrator = HMCIntegrator(timestep, temperature=temperature)
 #integrator = VVVRIntegrator(timestep, temperature=temperature)
 #integrator = GHMCIntegrator(timestep, temperature=temperature)
-integrator = VelocityVerletIntegrator(timestep)
-#integrator = openmm.VerletIntegrator(timestep)
+#integrator = VelocityVerletIntegrator(timestep)
+integrator = openmm.VerletIntegrator(timestep)
 
-# Get constraint tolerance
-tol = integrator.getConstraintTolerance()
+# Set constraint tolerance
+integrator.setConstraintTolerance(tolerance)
+
+# Select platform manually.
+platform_name = 'Reference'
+platform = openmm.Platform.getPlatformByName(platform_name)
+options = {"OpenCLPrecision": "double", "CudaPrecision": "double"}
 
 # Create Context and set positions and velocities.
-context = openmm.Context(system, integrator)
+context = openmm.Context(system, integrator, platform, options)
 context.setPositions(positions)
-context.applyConstraints(tol)
-
-#context.setVelocities(velocities) 
+context.applyConstraints(tolerance)
 
 print context.getPlatform().getName()
 
 # Minimize
-#openmm.LocalEnergyMinimizer.minimize(context)
+openmm.LocalEnergyMinimizer.minimize(context, 0.1*units.kilojoules_per_mole/units.angstroms, 50)
+
+# Equilibrate
+for iteration in range(nequil):
+    print "equilibration iteration %d / %d : propagating for %d steps..." % (iteration, nequil, nsteps)
+
+    # Assign velocities.
+    context.setVelocitiesToTemperature(temperature)
+    
+    # Integrate
+    integrator.step(nsteps)
 
 # Accumulate statistics.
 x_n = numpy.zeros([niterations], numpy.float64) # x_n[i] is the x position of atom 1 after iteration i, in angstroms
@@ -764,8 +784,8 @@ for iteration in range(niterations):
 
     # Assign velocities.
     context.setVelocitiesToTemperature(temperature)
-    context.applyConstraints(tol)
-    context.applyVelocityConstraints(tol)
+    context.applyConstraints(tolerance)
+    context.applyVelocityConstraints(tolerance)
 
     state = context.getState(getEnergy=True)
     initial_potential_energy = state.getPotentialEnergy()
@@ -814,7 +834,7 @@ x_mean_exact = 0.0 # mean, in angstroms
 x_std_exact = 1.0 / units.sqrt(beta * K) / units.angstroms # std dev, in angstroms
 
 # Analyze statistics.
-g = statisticalInefficiency(x_n) 
+g = statisticalInefficiency(potential_n) 
 Neff = niterations / g # number of effective samples
 
 x_mean = x_n.mean()
