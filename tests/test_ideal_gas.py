@@ -56,7 +56,7 @@ import simtk
 import simtk.unit as units
 import simtk.openmm as openmm
 
-from test_systems import IdealGas, ThermodynamicState
+from repex.testsystems import IdealGas, ThermodynamicState
 
 #=============================================================================================
 # Set parameters

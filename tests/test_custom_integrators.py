@@ -45,7 +45,7 @@ import time
 import simtk.unit as units
 import simtk.openmm as openmm
 
-import test_systems as testsystems
+from repex import testsystems
 
 #=============================================================================================
 # CONSTANTS
@@ -715,8 +715,8 @@ nsteps = 1000
 niterations = 100
 
 # Select system:
-testsystem = testsystems.MolecularIdealGas()
-#testsystem = testsystems.AlanineDipeptideImplicit(flexibleConstraints=False, shake=True)
+#testsystem = testsystems.MolecularIdealGas()
+testsystem = testsystems.AlanineDipeptideImplicit(flexibleConstraints=False, shake=True)
 #testsystem = testsystems.LysozymeImplicit(flexibleConstraints=False, shake=True)
 #testsystem = testsystems.HarmonicOscillator()
 #testsystem = testsystems.HarmonicOscillatorArray(N=16)
@@ -725,23 +725,28 @@ testsystem = testsystems.MolecularIdealGas()
 # Retrieve system and positions.
 [system, positions] = [testsystem.system, testsystem.positions]
 
-velocities = generateMaxwellBoltzmannVelocities(system, temperature)
+#velocities = generateMaxwellBoltzmannVelocities(system, temperature)
 ndof = 3*system.getNumParticles() - system.getNumConstraints()
 
 # Select integrator:
-integrator = openmm.LangevinIntegrator(temperature, friction, timestep)
+#integrator = openmm.LangevinIntegrator(temperature, friction, timestep)
 #integrator = AndersenVelocityVerletIntegrator(temperature, timestep)
 #integrator = MetropolisMonteCarloIntegrator(timestep, temperature=temperature)
 #integrator = HMCIntegrator(timestep, temperature=temperature)
 #integrator = VVVRIntegrator(timestep, temperature=temperature)
 #integrator = GHMCIntegrator(timestep, temperature=temperature)
-#integrator = VelocityVerletIntegrator(timestep)
+integrator = VelocityVerletIntegrator(timestep)
 #integrator = openmm.VerletIntegrator(timestep)
+
+# Get constraint tolerance
+tol = integrator.getConstraintTolerance()
 
 # Create Context and set positions and velocities.
 context = openmm.Context(system, integrator)
 context.setPositions(positions)
-context.setVelocities(velocities) 
+context.applyConstraints(tol)
+
+#context.setVelocities(velocities) 
 
 print context.getPlatform().getName()
 
@@ -753,8 +758,14 @@ x_n = numpy.zeros([niterations], numpy.float64) # x_n[i] is the x position of at
 potential_n = numpy.zeros([niterations], numpy.float64) # potential_n[i] is the potential energy after iteration i, in kT
 kinetic_n = numpy.zeros([niterations], numpy.float64) # kinetic_n[i] is the kinetic energy after iteration i, in kT
 temperature_n = numpy.zeros([niterations], numpy.float64) # temperature_n[i] is the instantaneous kinetic temperature from iteration i, in K
+delta_n = numpy.zeros([niterations], numpy.float64) # delta_n[i] is the change in total energy from iteration i, in kT
 for iteration in range(niterations):
     print "iteration %d / %d : propagating for %d steps..." % (iteration, niterations, nsteps)
+
+    # Assign velocities.
+    context.setVelocitiesToTemperature(temperature)
+    context.applyConstraints(tol)
+    context.applyVelocityConstraints(tol)
 
     state = context.getState(getEnergy=True)
     initial_potential_energy = state.getPotentialEnergy()
@@ -793,7 +804,7 @@ for iteration in range(niterations):
     potential_n[iteration] = final_potential_energy / kT
     kinetic_n[iteration] = final_kinetic_energy / kT
     temperature_n[iteration] = instantaneous_temperature / units.kelvin
-    
+    delta_n[iteration] = delta_total_energy / kT
 
 
 # Compute expected statistics for harmonic oscillator.
@@ -823,6 +834,9 @@ temperature_error = temperature_mean - temperature/units.kelvin
 nsigma = abs(temperature_error) / dtemperature_mean
 nsigma_cutoff = 6.0
 
+delta_mean = delta_n.mean()
+ddelta_mean = delta_n.std() / numpy.sqrt(Neff)
+
 # TODO: Rework ugly statistics calculation and add nsigma deviation information.
 
 print "positions"
@@ -834,3 +848,7 @@ if nsigma < nsigma_cutoff:
     print "  mean     observed %10.5f +- %10.5f  expected %10.5f  error %10.5f +- %10.5f (%.1f sigma)" % (temperature_mean, dtemperature_mean, temperature/units.kelvin, temperature_error, dtemperature_mean, nsigma)
 else:
     print "  mean     observed %10.5f +- %10.5f  expected %10.5f  error %10.5f +- %10.5f (%.1f sigma) ***" % (temperature_mean, dtemperature_mean, temperature/units.kelvin, temperature_error, dtemperature_mean, nsigma)
+
+print ""
+print "drift"
+print "  mean   observed %10.5f +- %10.5f kT" % (delta_mean, ddelta_mean)

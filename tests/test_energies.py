@@ -47,7 +47,7 @@ import numpy
 import simtk.unit as units
 import simtk.openmm as openmm
 
-import test_systems as testsystems
+from repex import testsystems
 
 #=============================================================================================
 # Expected potential energies for each test system
