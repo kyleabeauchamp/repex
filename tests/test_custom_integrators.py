@@ -694,7 +694,7 @@ niterations = 100 # number of production iterations
 # Select system:
 #testsystem = testsystems.MolecularIdealGas()
 #testsystem = testsystems.AlanineDipeptideVacuum(constraints=None)
-testsystem = testsystems.AlanineDipeptideVacuum(constraints=app.HBonds)
+#testsystem = testsystems.AlanineDipeptideVacuum(constraints=app.HBonds)
 #testsystem = testsystems.AlanineDipeptideImplicit(constraints=app.HBonds)
 #testsystem = testsystems.AlanineDipeptideExplicit(constraints=app.HBonds, rigid_water=True)
 #testsystem = testsystems.Diatom(constraint=True, use_central_potential=True)
@@ -702,7 +702,7 @@ testsystem = testsystems.AlanineDipeptideVacuum(constraints=app.HBonds)
 #testsystem = testsystems.LysozymeImplicit(flexibleConstraints=False, shake=True)
 #testsystem = testsystems.HarmonicOscillator()
 #testsystem = testsystems.HarmonicOscillatorArray(N=16)
-#testsystem = testsystems.WaterBox(constrain=True, flexible=False)
+testsystem = testsystems.WaterBox(constrain=True, flexible=False)
 
 # Retrieve system and positions.
 [system, positions] = [testsystem.system, testsystem.positions]
