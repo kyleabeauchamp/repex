@@ -23,8 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class ReplicaExchange(object):
-    """
-    """    
 
     def __init__(self, states, coordinates, database=None, mpicomm=None, **kwargs):
         """
@@ -854,6 +852,23 @@ class ReplicaExchange(object):
 
     @classmethod
     def create_repex(cls, thermodynamic_states, coordinates, filename, mpicomm=None, **kwargs):
+        """Create a new ReplicaExchange simulation.
+        
+        Parameters
+        ----------
+
+        thermodynamic_states : list([ThermodynamicStates])
+            The list of thermodynamic states to simulate in
+        coordinates : list([simtk.unit.Quantity]), shape=(n_replicas, n_atoms, 3), unit=Length
+            The starting coordinates for each replica
+        filename : string 
+            name of NetCDF file to bind to for simulation output and checkpointing
+        mpicomm : mpi4py communicator, default=None
+            MPI communicator, if parallel execution is desired.      
+        kwargs (dict) - Optional parameters to use for specifying simulation
+            Provided keywords will be matched to object variables to replace defaults.
+            
+        """    
         if mpicomm is None or (mpicomm.rank == 0):
             database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates, **kwargs)  # To do: eventually use factory for looking up database type via filename
         else:
@@ -866,6 +881,19 @@ class ReplicaExchange(object):
     
     @classmethod
     def resume_repex(cls, filename, mpicomm=None, **kwargs):
+        """Resume an existing ReplicaExchange (or subclass) simulation.
+        
+        Parameters
+        ----------
+
+        filename : string 
+            name of NetCDF file to bind to for simulation output and checkpointing
+        mpicomm : mpi4py communicator, default=None
+            MPI communicator, if parallel execution is desired.      
+        kwargs (dict) - Optional parameters to use for specifying simulation
+            Provided keywords will be matched to object variables to replace defaults.
+            
+        """     
         if mpicomm is None or (mpicomm.rank == 0):
             database = netcdf_io.NetCDFDatabase(filename, **kwargs)  # To do: eventually use factory for looking up database type via filename
             thermodynamic_states, coordinates = database.thermodynamic_states, database.coordinates 

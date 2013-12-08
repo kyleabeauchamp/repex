@@ -29,10 +29,7 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann consta
 
 
 class ParallelTempering(ReplicaExchange):
-    """
-    Parallel tempering simulation facility.
-
-    DESCRIPTION
+    """Parallel tempering simulation class.
 
     This class provides a facility for parallel tempering simulations.  It is a subclass of ReplicaExchange, but provides
     various convenience methods and efficiency improvements for parallel tempering simulations, so should be preferred for
@@ -40,63 +37,16 @@ class ParallelTempering(ReplicaExchange):
     range) is used to automatically build a set of ThermodynamicState objects for replica-exchange.  Efficiency improvements
     make use of the fact that the reduced potentials are linear in inverse temperature.
     
-    EXAMPLES
-
-    Parallel tempering of alanine dipeptide in implicit solvent.
-    
-    >>> # Create alanine dipeptide test system.
-    >>> import simtk.pyopenmm.extras.testsystems as testsystems
-    >>> [system, coordinates] = testsystems.AlanineDipeptideImplicit()
-    >>> # Create temporary file for storing output.
-    >>> import tempfile
-    >>> file = tempfile.NamedTemporaryFile() # temporary file for testing
-    >>> store_filename = file.name
-    >>> # Initialize parallel tempering on an exponentially-spaced scale
-    >>> T_min = 298.0 * units.kelvin
-    >>> T_max = 600.0 * units.kelvin
-    >>> nreplicas = 3
-    >>> simulation = ParallelTempering(system, coordinates, store_filename, T_min=T_min, T_max=T_max, ntemps=nreplicas)
-    >>> simulation.number_of_iterations = 2 # set the simulation to only run 10 iterations
-    >>> simulation.timestep = 2.0 * units.femtoseconds # set the timestep for integration
-    >>> simulation.minimize = False
-    >>> simulation.nsteps_per_iteration = 50 # run 50 timesteps per iteration
-    >>> # Run simulation.
-    >>> simulation.run() # run the simulation
-
-    Parallel tempering of alanine dipeptide in explicit solvent at 1 atm.
-    
-    >>> # Create alanine dipeptide system
-    >>> import simtk.pyopenmm.extras.testsystems as testsystems
-    >>> [system, coordinates] = testsystems.AlanineDipeptideExplicit()
-    >>> # Add Monte Carlo barsostat to system (must be same pressure as simulation).
-    >>> import simtk.openmm as openmm
-    >>> pressure = 1.0 * units.atmosphere
-    >>> # Create temporary file for storing output.
-    >>> import tempfile
-    >>> file = tempfile.NamedTemporaryFile() # temporary file for testing
-    >>> store_filename = file.name
-    >>> # Initialize parallel tempering on an exponentially-spaced scale
-    >>> T_min = 298.0 * units.kelvin
-    >>> T_max = 600.0 * units.kelvin    
-    >>> nreplicas = 3
-    >>> simulation = ParallelTempering(system, coordinates, store_filename, T_min=T_min, T_max=T_max, pressure=pressure, ntemps=nreplicas)
-    >>> simulation.number_of_iterations = 2 # set the simulation to only run 10 iterations
-    >>> simulation.timestep = 2.0 * units.femtoseconds # set the timestep for integration
-    >>> simulation.nsteps_per_iteration = 50 # run 50 timesteps per iteration
-    >>> simulation.minimize = False # don't minimize first
-    >>> # Run simulation.
-    >>> simulation.run() # run the simulation
-
     """
 
     def _compute_energies(self):
-        """
-        Compute reduced potentials of all replicas at all states (temperatures).
+        """Compute reduced potentials of all replicas at all states (temperatures).
 
-        NOTES
+        Notes
+        -----
 
-        Because only the temperatures differ among replicas, we replace the generic O(N^2) replica-exchange implementation with an O(N) implementation.
-        
+        Because only the temperatures differ among replicas, we replace 
+        the generic O(N^2) replica-exchange implementation with an O(N) implementation.
         """
 
         start_time = time.time()
@@ -169,6 +119,42 @@ class ParallelTempering(ReplicaExchange):
 
     @classmethod
     def create_repex(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, **kwargs):
+        """Create a new ParallelTempering simulation.
+        
+        Parameters
+        ----------
+
+        system : simtk.openmm.System
+            The temperature of the system.
+        coordinates : list([simtk.unit.Quantity]), shape=(n_replicas, n_atoms, 3), unit=Length
+            The starting coordinates for each replica
+        filename : string 
+            name of NetCDF file to bind to for simulation output and checkpointing
+        T_min : simtk.unit.Quantity, unit=Temperature, default=None
+            The lowest temperature of the Parallel Temperature run
+        T_max : simtk.unit.Quantity, unit=Temperature, default=None
+            The highest temperature of the Parallel Temperature run
+        n_temps : int, default=None
+            The number of replicas.
+        temperatures : list([simtk.unit.Quantity]), unit=Temperature
+            Explicit list of each temperature to use
+        pressure : simtk.unit.Quantity, unit=Pa, default=None
+            If specified, perform NPT simulation at this temperature.
+        mpicomm : mpi4py communicator, default=None
+            MPI communicator, if parallel execution is desired.      
+        kwargs (dict) - Optional parameters to use for specifying simulation
+            Provided keywords will be matched to object variables to replace defaults.
+            
+        Notes
+        -----
+        
+        The parameters of this function are different from  ReplicaExchange.create_repex().
+        The optional arguments temperatures is incompatible with (T_min, T_max, and n_temps).  
+        Only one of those two groups should be specified.  
+        
+        If T_min, T_max, and n_temps are specified, temperatures will be exponentially
+        spaced between T_min and T_max.
+        """
 
         if temperatures is not None:
             logger.info("Using provided temperatures")
