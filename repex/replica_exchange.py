@@ -23,8 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class ReplicaExchange(object):
-    """
-    """    
 
     def __init__(self, states, coordinates, database=None, mpicomm=None, **kwargs):
         """
@@ -164,8 +162,8 @@ class ReplicaExchange(object):
         self.replica_states     = np.zeros([self.n_states], np.int32) # replica_states[i] is the state that replica i is currently at
         self.u_kl               = np.zeros([self.n_states, self.n_states], np.float32)        
         self.swap_Pij_accepted  = np.zeros([self.n_states, self.n_states], np.float32)
-        self.Nij_proposed       = np.zeros([self.n_states,self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
-        self.Nij_accepted       = np.zeros([self.n_states,self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
+        self.Nij_proposed       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
+        self.Nij_accepted       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
 
         self.replica_coordinates = [ copy.deepcopy(self.provided_coordinates[replica_index % len(self.provided_coordinates)]) for replica_index in range(self.n_states) ]
 
@@ -713,6 +711,44 @@ class ReplicaExchange(object):
 
         logger.debug("Mixing of replicas took %.3f s" % (end_time - start_time))
 
+    def _accumulate_mixing_statistics(self):
+        """Compute this mixing statistics (Tij)."""
+        if hasattr(self, "_Nij"):
+            return self._accumulate_mixing_statistics_update()
+        else:
+            return self._accumulate_mixing_statistics_full()
+
+    def _accumulate_mixing_statistics_full(self):
+        """Compute statistics of transitions iterating over all iterations of repex."""
+        self._Nij = np.zeros([self.n_states,self.n_states], np.float64)
+        for iteration in range(self.iteration - 1):
+            for ireplica in range(self.n_states):
+                istate = self.database.states[iteration, ireplica]
+                jstate = self.database.states[iteration + 1, ireplica]
+                self._Nij[istate,jstate] += 0.5
+                self._Nij[jstate,istate] += 0.5
+        Tij = np.zeros([self.n_states,self.n_states], np.float64)
+        for istate in range(self.n_states):
+            Tij[istate,:] = self._Nij[istate,:] / self._Nij[istate,:].sum()
+        
+        return Tij
+    
+    def _accumulate_mixing_statistics_update(self):
+        """Compute statistics of transitions updating Nij of last iteration of repex."""
+                
+        iteration = self.iteration - 2
+        for ireplica in range(self.n_states):
+            istate = self.database.states[iteration, ireplica]
+            jstate = self.database.states[iteration + 1, ireplica]
+            self._Nij[istate,jstate] += 0.5
+            self._Nij[jstate,istate] += 0.5
+
+        Tij = np.zeros([self.n_states,self.n_states], np.float64)
+        for istate in range(self.n_states):
+            Tij[istate,:] = self._Nij[istate,:] / self._Nij[istate,:].sum()
+        
+        return Tij
+
 
     def _show_mixing_statistics(self):
         """Print summary of mixing statistics.
@@ -732,17 +768,7 @@ class ReplicaExchange(object):
         
         initial_time = time.time()
 
-        # Compute statistics of transitions.
-        Nij = np.zeros([self.n_states,self.n_states], np.float64)
-        for iteration in range(self.iteration - 1):
-            for ireplica in range(self.n_states):
-                istate = self.database.states[iteration, ireplica]
-                jstate = self.database.states[iteration + 1, ireplica]
-                Nij[istate,jstate] += 0.5
-                Nij[jstate,istate] += 0.5
-        Tij = np.zeros([self.n_states,self.n_states], np.float64)
-        for istate in range(self.n_states):
-            Tij[istate,:] = Nij[istate,:] / Nij[istate,:].sum()
+        Tij = self._accumulate_mixing_statistics()
 
         if self.show_mixing_statistics:
             P = pd.DataFrame(Tij)
@@ -826,6 +852,23 @@ class ReplicaExchange(object):
 
     @classmethod
     def create_repex(cls, thermodynamic_states, coordinates, filename, mpicomm=None, **kwargs):
+        """Create a new ReplicaExchange simulation.
+        
+        Parameters
+        ----------
+
+        thermodynamic_states : list([ThermodynamicStates])
+            The list of thermodynamic states to simulate in
+        coordinates : list([simtk.unit.Quantity]), shape=(n_replicas, n_atoms, 3), unit=Length
+            The starting coordinates for each replica
+        filename : string 
+            name of NetCDF file to bind to for simulation output and checkpointing
+        mpicomm : mpi4py communicator, default=None
+            MPI communicator, if parallel execution is desired.      
+        kwargs (dict) - Optional parameters to use for specifying simulation
+            Provided keywords will be matched to object variables to replace defaults.
+            
+        """    
         if mpicomm is None or (mpicomm.rank == 0):
             database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates, **kwargs)  # To do: eventually use factory for looking up database type via filename
         else:
@@ -838,6 +881,19 @@ class ReplicaExchange(object):
     
     @classmethod
     def resume_repex(cls, filename, mpicomm=None, **kwargs):
+        """Resume an existing ReplicaExchange (or subclass) simulation.
+        
+        Parameters
+        ----------
+
+        filename : string 
+            name of NetCDF file to bind to for simulation output and checkpointing
+        mpicomm : mpi4py communicator, default=None
+            MPI communicator, if parallel execution is desired.      
+        kwargs (dict) - Optional parameters to use for specifying simulation
+            Provided keywords will be matched to object variables to replace defaults.
+            
+        """     
         if mpicomm is None or (mpicomm.rank == 0):
             database = netcdf_io.NetCDFDatabase(filename, **kwargs)  # To do: eventually use factory for looking up database type via filename
             thermodynamic_states, coordinates = database.thermodynamic_states, database.coordinates 
