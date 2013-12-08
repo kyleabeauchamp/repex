@@ -102,7 +102,18 @@ def process_kwargs(kwargs):
 
 
 def permute_energies(X, s):
-    """Re-order an observable X so that u[i, j, k] correponds to frame i, sampled from state j, evaluated in state k."""
+    """Re-order an observable X so that u[i, j, k] correponds to frame i, sampled from state j, evaluated in state k.
+
+    Parameters
+    ----------
+
+    X : np.ndarray, shape=(n_iter, n_replicas, n_replicas)
+        The observable to permute
+    s : np.ndarray, shape=(n_iter, n_replicas), dtype='int'
+        The thermodynamic state indices of each replica slot.  s[i, k] is the 
+        thermodynamic state index of frame i, replica k.  
+    """
+
     X = ensure_type(X, 'float32', 3, "X")
     n_iter, n_replicas, n_replicas = X.shape
     s = ensure_type(s, "int", 2, "s", shape=(n_iter, n_replicas))
