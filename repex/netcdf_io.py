@@ -132,45 +132,6 @@ class NetCDFDatabase(object):
 
         # Force sync to disk to avoid data loss.
         self.ncfile.sync()
-    
-    @time_and_print
-    def _write_iteration_netcdf(self):
-        """Write positions, states, and energies of current iteration to NetCDF file.
-        """
-
-        initial_time = time.time()
-
-        # Store replica positions.
-        for replica_index in range(self.n_states):
-            coordinates = self.replica_coordinates[replica_index]
-            x = coordinates / units.nanometers
-            self.ncfile.variables['positions'][self.iteration,replica_index,:,:] = x[:,:]
-            
-        # Store box vectors and volume.
-        for replica_index in range(self.n_states):
-            state_index = self.replica_states[replica_index]
-            state = self.thermodynamic_states[state_index]
-            box_vectors = self.replica_box_vectors[replica_index]
-            for i in range(3):
-                self.ncfile.variables['box_vectors'][self.iteration,replica_index,i,:] = (box_vectors[i] / units.nanometers)
-            volume = state._volume(box_vectors)
-            self.ncfile.variables['volumes'][self.iteration,replica_index] = volume / (units.nanometers**3)
-
-        # Store state information.
-        self.ncfile.variables['states'][self.iteration,:] = self.replica_states[:]
-
-        # Store energies.
-        self.ncfile.variables['energies'][self.iteration,:,:] = self.u_kl[:,:]
-
-        # Store mixing statistics.
-        # TODO: Write mixing statistics for this iteration?
-        self.ncfile.variables['proposed'][self.iteration,:,:] = self.Nij_proposed[:,:]
-        self.ncfile.variables['accepted'][self.iteration,:,:] = self.Nij_accepted[:,:]        
-
-        # Store timestamp this iteration was written.
-        self.ncfile.variables['timestamp'][self.iteration] = time.ctime()
-
-        self.ncfile.sync()  # Force sync to disk to avoid data loss.
 
     @time_and_print
     def _store_thermodynamic_states(self, states):
