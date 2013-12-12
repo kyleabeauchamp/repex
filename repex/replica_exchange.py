@@ -812,7 +812,7 @@ class ReplicaExchange(object):
 
         self.database.output_iteration(iteration=self.iteration, coordinates=coordinates, box_vectors=box_vectors, 
                 volumes=volumes, replica_states=self.replica_states, energies=self.u_kl, 
-                proposed=self.Nij_proposed, accepted=self.Nij_accepted, time=time.ctime())
+                proposed=self.Nij_proposed, accepted=self.Nij_accepted, time=time.time())
     
 
     def _run_sanity_checks(self):

@@ -116,7 +116,7 @@ class NetCDFDatabase(object):
         setattr(ncvar_volumes, "long_name", "volume[iteration][replica] is the box volume for replica 'replica' from iteration 'iteration-1'.")
 
         # Create timestamp variable.
-        ncvar_timestamp = self.ncfile.createVariable('timestamp', str, ('iteration',))
+        ncvar_timestamp = self.ncfile.createVariable('timestamp', "f", ('iteration',))
 
         # Create group for performance statistics.
         ncgrp_timings = self.ncfile.createGroup('timings')
