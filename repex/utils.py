@@ -84,8 +84,6 @@ default_options["show_energies"] = True
 default_options["show_mixing_statistics"] = True
 default_options["platform"] = None
 default_options["integrator"] = None
-default_options["mpicomm"] = None
-
 
 
 def process_kwargs(kwargs):

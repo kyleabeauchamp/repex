@@ -17,6 +17,7 @@ from utils import time_and_print, process_kwargs, fix_coordinates, generate_maxw
 import citations
 import netcdf_io
 from version import version as __version__
+import dummympi
 
 import logging
 logger = logging.getLogger(__name__)
@@ -31,7 +32,10 @@ class ReplicaExchange(object):
         # To allow for parameters to be modified after object creation, class is not initialized until a call to self._initialize().
         self._initialized = False
         
-        self.mpicomm = mpicomm
+        if mpicomm is None:
+            self.mpicomm = dummympi.DummyMPIComm()
+        else:
+            self.mpicomm = mpicomm
 
         options = process_kwargs(kwargs)
         
@@ -57,6 +61,7 @@ class ReplicaExchange(object):
 
     def set_attributes(self):
         for key, val in self.options.iteritems():
+            logger.debug("Setting option %s as %s" % (key, val))
             setattr(self, key, val)
 
     def run(self):
@@ -185,13 +190,12 @@ class ReplicaExchange(object):
         """
 
         if self._initialized:
-            print "Simulation has already been initialized."
+            logger.warn("Simulation has already been initialized.")
             raise Error
 
         self.get_platform()
 
-        if self.mpicomm:
-            logger.debug("Initialized node %d / %d" % (self.mpicomm.rank, self.mpicomm.size))
+        logger.debug("Initialized node %d / %d" % (self.mpicomm.rank, self.mpicomm.size))
   
         citations.display_citations(self.replica_mixing_scheme, self.online_analysis)
 
@@ -358,17 +362,8 @@ class ReplicaExchange(object):
 
         end_time = time.time()
         logger.debug("Synchronizing configurations and box vectors: elapsed time %.3f s" % (end_time - start_time))
+
         
-    def _propagate_replicas_serial(self):        
-        """
-        Propagate all replicas using serial execution.
-
-        """
-
-        logger.debug("Propagating all replicas for %.3f ps..." % (self.nsteps_per_iteration * self.timestep / units.picoseconds))
-        for replica_index in range(self.n_states):
-            self._propagate_replica(replica_index)
-
     def _propagate_replicas(self):
         """
         Propagate all replicas.
@@ -380,10 +375,7 @@ class ReplicaExchange(object):
         """
         start_time = time.time()
 
-        if self.mpicomm:
-            self._propagate_replicas_mpi()
-        else:
-            self._propagate_replicas_serial()
+        self._propagate_replicas_mpi()
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -439,6 +431,7 @@ class ReplicaExchange(object):
             self._propagate_replicas()
         self.timestep = production_timestep
 
+
     def _compute_energies(self):
         """
         Compute energies of all replicas at all states.
@@ -454,17 +447,6 @@ class ReplicaExchange(object):
         
         logger.debug("Computing energies...")
         
-        if self.mpicomm:
-            self._compute_energies_mpi()
-        else:
-            self._compute_energies_serial()
-
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        time_per_energy= elapsed_time / float(self.n_states)**2 
-        logger.debug("Time to compute all energies %.3f s (%.3f per energy calculation)." % (elapsed_time, time_per_energy))
-
-    def _compute_energies_mpi(self):
         # Compute energies for this node's share of states.
         for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
             for replica_index in range(self.n_states):
@@ -477,10 +459,10 @@ class ReplicaExchange(object):
             index = state_index // self.mpicomm.size # index within trajectory batch
             self.u_kl[:,state_index] = energies_gather[source][:,index]
 
-    def _compute_energies_serial(self):
-        for state_index in range(self.n_states):
-            for replica_index in range(self.n_states):
-                self.u_kl[replica_index,state_index] = self.states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        time_per_energy= elapsed_time / float(self.n_states)**2 
+        logger.debug("Time to compute all energies %.3f s (%.3f per energy calculation)." % (elapsed_time, time_per_energy))
 
 
     def _mix_all_replicas(self):
@@ -655,7 +637,7 @@ class ReplicaExchange(object):
         """Attempt to swap replicas according to user-specified scheme.
         """
 
-        if (self.mpicomm) and (self.mpicomm.rank != 0):
+        if self.mpicomm.rank != 0:
             # Non-root nodes receive state information.
             self.replica_states = self.mpicomm.bcast(self.replica_states, root=0)
             return
@@ -703,11 +685,10 @@ class ReplicaExchange(object):
                 for jstate in range(self.n_states):
                     if istate != jstate:
                         swap_Pij_accepted[istate,jstate] = float(Nij_accepted[istate,jstate]) / float(Ni)
-
-        if self.mpicomm:
-            # Root node will share state information with all replicas.
-            logger.debug("Sharing state information...")
-            self.replica_states = self.mpicomm.bcast(self.replica_states, root=0)
+    
+        # Root node will share state information with all replicas.
+        logger.debug("Sharing state information...")
+        self.replica_states = self.mpicomm.bcast(self.replica_states, root=0)
 
         logger.debug("Mixing of replicas took %.3f s" % (end_time - start_time))
 
@@ -755,7 +736,7 @@ class ReplicaExchange(object):
         """
 
         # Only root node can print.
-        if self.mpicomm and (self.mpicomm.rank != 0):
+        if self.mpicomm.rank != 0:
             return
 
         # Don't print anything until we've accumulated some statistics.
@@ -826,25 +807,22 @@ class ReplicaExchange(object):
             coordinates = self.replica_coordinates[replica_index]
             x = coordinates / units.nanometers
             if np.any(np.isnan(x)):
-                print "nan encountered in replica %d coordinates." % replica_index
+                logger.warn("nan encountered in replica %d coordinates." % replica_index)
                 abort = True
 
         # Check energies.
         if np.any(np.isnan(self.u_kl)):
-            print "nan encountered in u_kl state energies"
+            logger.warn("nan encountered in u_kl state energies")
             abort = True
 
         if abort:
-            if self.mpicomm:
-                self.mpicomm.Abort()
-            else:
-                raise Exception("Aborting.")
+            self.mpicomm.Abort()
 
 
     def _show_energies(self):
         """Show energies (in units of kT) for all replicas at all states.
         """
-        if self.mpicomm and (self.mpicomm.rank != 0):
+        if self.mpicomm.rank != 0:
             return
 
         U = pd.DataFrame(self.u_kl)
