@@ -4,7 +4,6 @@ import time
 
 import numpy as np
 
-import simtk.openmm 
 import simtk.unit as units
 
 from mdtraj.utils import ensure_type
