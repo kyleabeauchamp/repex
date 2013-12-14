@@ -205,8 +205,16 @@ class TestSystem(object):
         """A list of available analytical properties, accessible via 'get_propertyname(thermodynamic_state)' calls."""
         return [ method[4:] for method in dir(self) if (method[0:4]=='get_') ]
 
-    def get_reduced_potential_expectation(self, state_sampled_from, state_evaluated_in):
-        """Calculate the expected potential energy in state_sampled_from, divided by kB * T in state_evaluated_in."""
+    def reduced_potential_expectation(self, state_sampled_from, state_evaluated_in):
+        """Calculate the expected potential energy in state_sampled_from, divided by kB * T in state_evaluated_in.
+        
+        Notes
+        -----
+        
+        This is not called get_reduced_potential_expectation because this function
+        requires two, not one, inputs.
+        """
+        
         if hasattr(self, "get_potential_expectation"):
             U = self.get_potential_expectation(state_sampled_from)
             U_red = U / (kB * state_evaluated_in.temperature)
@@ -2057,34 +2065,4 @@ class CustomGBForceSystem(TestSystem):
         np.random.set_state(state)
 
         self.system, self.positions = system, positions
-
-#=============================================================================================
-# Definte dest system names
-#=============================================================================================
-
-testsystem_classes = [cls for cls in vars()['TestSystem'].__subclasses__()]
-
-#=============================================================================================
-# MAIN AND TESTS
-#=============================================================================================
-
-if __name__ == "__main__":
-    # Run doctests.
-    import doctest
-    doctest.testmod()    
-    
-    # Make sure all advertised analytical properties can be computed.
-    import simtk.unit as u
-    state = ThermodynamicState(temperature=300.0*u.kelvin, pressure=1.0*u.atmosphere)
-    testsystem_classes = [cls for cls in vars()['TestSystem'].__subclasses__()]
-    print "Testing analytical property computation:"
-    for testsystem_class in testsystem_classes:
-        class_name = testsystem_class.__name__
-        testsystem = testsystem_class()
-        property_list = testsystem.analytical_properties
-        if len(property_list) > 0:
-            for property_name in property_list:
-                method = getattr(testsystem, 'get_' + property_name)
-                print "%32s . %32s : %32s" % (class_name, property_name, str(method(state)))
-
 

@@ -34,7 +34,7 @@ def test_harmonic_oscillators(mpicomm):
 
     u = permute_energies(u_permuted, s)
 
-    u0 = np.array([[ho.get_reduced_potential_expectation(s0, s1) for s1 in states] for s0 in states])
+    u0 = np.array([[ho.reduced_potential_expectation(s0, s1) for s1 in states] for s0 in states])
 
     l0 = np.log(u0)  # Compare on log scale because uncertainties are proportional to values
     l1 = np.log(u.mean(0))
