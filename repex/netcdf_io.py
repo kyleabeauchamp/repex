@@ -198,17 +198,18 @@ class NetCDFDatabase(object):
         # Read state information.
         thermodynamic_states = list()
         for state_index in range(n_states):
-            # Populate a new ThermodynamicState object.
-            state = ThermodynamicState()
-            # Read temperature.
-            state.temperature = ncgrp_stateinfo.variables['temperatures'][state_index] * units.kelvin
-            # Read pressure, if present.
+                        
+            temperature = ncgrp_stateinfo.variables['temperatures'][state_index] * units.kelvin
+            
+            pressure = None
             if 'pressures' in ncgrp_stateinfo.variables:
-                state.pressure = ncgrp_stateinfo.variables['pressures'][state_index] * units.atmospheres
+                pressure = ncgrp_stateinfo.variables['pressures'][state_index] * units.atmospheres
+            
             # Reconstitute System object.
-            state.system = mm.System() 
-            state.system.__setstate__(str(ncgrp_stateinfo.variables['systems'][state_index]))
-            # Store state.
+            system = str(ncgrp_stateinfo.variables['systems'][state_index])
+            
+            state = ThermodynamicState(system=system, temperature=temperature, pressure=pressure)
+
             thermodynamic_states.append(state)
         
         return thermodynamic_states

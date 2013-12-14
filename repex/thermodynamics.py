@@ -55,6 +55,12 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann consta
 # Thermodynamic state description
 #=============================================================================================
 
+def str_to_system(system_string):
+    """Rebuild an OpenMM System from string representation."""
+    system = mm.System() 
+    system.__setstate__(system_string)
+    return system
+
 class ThermodynamicState(object):
     """
     Data specifying a thermodynamic state obeying Boltzmann statistics.
@@ -111,7 +117,10 @@ class ThermodynamicState(object):
 
         # Store provided values.
         if system is not None:
-            # TODO: Check to make sure system object implements OpenMM System API.
+            if type(system) == str:
+                system = str_to_system(system)
+            if type(system) is not mm.System:
+                raise(TypeError("system must be an OpenMM System; instead found %s" % type(system)))
             self.system = copy.deepcopy(system) # TODO: Do this when deep copy works.
             # self.system = system # we make a shallow copy for now, which can cause trouble later
         if temperature is not None:
