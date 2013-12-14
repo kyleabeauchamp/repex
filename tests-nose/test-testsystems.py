@@ -3,7 +3,6 @@ import simtk.unit as u
 from repex.thermodynamics import ThermodynamicState
 from repex.parallel_tempering import ParallelTempering
 from repex import testsystems
-from repex.utils import eq_named
 from repex import dummympi
 import tempfile
 from mdtraj.testing import eq
