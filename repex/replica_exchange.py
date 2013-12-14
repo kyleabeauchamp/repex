@@ -38,8 +38,6 @@ class ReplicaExchange(object):
             self.mpicomm = mpicomm
 
         options = process_kwargs(kwargs)
-        
-        self.head_node = True
 
         self.database = database
 
@@ -239,7 +237,7 @@ class ReplicaExchange(object):
         """Do anything necessary to finish run except close files.
         """
 
-        if not self.head_node:
+        if not self.mpicomm.rank == 0:
             return
         
         self.database.finalize()
@@ -249,7 +247,7 @@ class ReplicaExchange(object):
         """
         self._finalize()
 
-        if not self.head_node:
+        if not self.mpicomm.rank == 0:
             return
 
         self.database.close()
@@ -776,7 +774,7 @@ class ReplicaExchange(object):
         Will save the following information:
         "iteration", "coordinates", "box_vectors", "volumes", "replica_states", "energies", "proposed", "accepted", "time"
         """
-        if not self.head_node:
+        if not self.mpicomm.rank == 0:
             return
 
         coordinates = np.array([self.replica_coordinates[replica_index] / units.nanometers for replica_index in range(self.n_states)])
