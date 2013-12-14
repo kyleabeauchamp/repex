@@ -13,7 +13,7 @@ import simtk.unit as units
 
 from thermodynamics import ThermodynamicState
 from constants import kB
-from utils import time_and_print, process_kwargs, fix_coordinates, generate_maxwell_boltzmann_velocities
+from utils import time_and_print, process_kwargs, fix_coordinates
 import citations
 import netcdf_io
 from version import version as __version__
@@ -284,8 +284,7 @@ class ReplicaExchange(object):
         box_vectors = self.replica_box_vectors[replica_index]
         context.setPeriodicBoxVectors(box_vectors[0,:], box_vectors[1,:], box_vectors[2,:])
 
-        velocities = generate_maxwell_boltzmann_velocities(state.system, state.temperature) 
-        context.setVelocities(velocities)
+        context.setVelocitiesToTemperature(state.temperature)
         setvelocities_end_time = time.time()
         # Run dynamics.
         integrator.step(self.nsteps_per_iteration)
