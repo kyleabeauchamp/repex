@@ -10,7 +10,6 @@ import datetime
 import numpy
 import numpy.linalg
 
-import simtk.openmm 
 import simtk.unit as units
 
 from thermodynamics import ThermodynamicState
