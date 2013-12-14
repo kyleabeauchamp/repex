@@ -4,14 +4,12 @@ from repex.thermodynamics import ThermodynamicState
 from repex.replica_exchange import ReplicaExchange
 from repex import testsystems
 from repex.utils import permute_energies
-from repex import dummympi
+from repex.mpinoseutils import mpitest
 import tempfile
-from mdtraj.testing import eq
-import logging
+from mdtraj.testing import eq, skipif
 
-logging.basicConfig(level=logging.DEBUG)
-
-def test_harmonic_oscillators():
+@mpitest(2)
+def test_harmonic_oscillators(mpicomm):
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
     T_min = 1.0 * unit.kelvin
@@ -27,7 +25,6 @@ def test_harmonic_oscillators():
 
     coordinates = [positions] * n_replicas
 
-    mpicomm = dummympi.DummyMPIComm()
     replica_exchange = ReplicaExchange.create_repex(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 1000
     replica_exchange.run()
@@ -43,7 +40,8 @@ def test_harmonic_oscillators():
     l1 = np.log(u.mean(0))
     eq(l0, l1, decimal=1)
 
-def test_harmonic_oscillators_save_and_load():
+@mpitest(2)
+def test_harmonic_oscillators_save_and_load(mpicomm):
 
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
@@ -60,13 +58,10 @@ def test_harmonic_oscillators_save_and_load():
 
     coordinates = [positions] * n_replicas
 
-    mpicomm = dummympi.DummyMPIComm()
     replica_exchange = ReplicaExchange.create_repex(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
-    replica_exchange.number_of_iterations = 200
+    replica_exchange.number_of_iterations = 50
     replica_exchange.run()
-    
-    
+
     replica_exchange = ReplicaExchange.resume_repex(nc_filename, mpicomm=mpicomm)
-    eq(replica_exchange.iteration, 200)
-    replica_exchange.number_of_iterations = 300
+    replica_exchange.number_of_iterations = 100
     replica_exchange.run()

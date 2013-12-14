@@ -4,13 +4,13 @@ from repex.thermodynamics import ThermodynamicState
 from repex import hamiltonian_exchange
 from repex import testsystems
 from repex.utils import permute_energies
-from repex import dummympi
+from repex.mpinoseutils import mpitest
 import tempfile
 from mdtraj.testing import eq
 from repex.constants import kB
 
-
-def test_power_oscillators():
+@mpitest(2)
+def test_power_oscillators(mpicomm):
 
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
@@ -28,7 +28,6 @@ def test_power_oscillators():
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
 
-    mpicomm = dummympi.DummyMPIComm()
     replica_exchange = hamiltonian_exchange.HamiltonianExchange.create_repex(state, systems, positions, nc_filename, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 2000
     replica_exchange.run()
@@ -45,7 +44,9 @@ def test_power_oscillators():
 
     eq(l0, l, decimal=1)
 
-def test_hrex_save_and_load():
+
+@mpitest(2)
+def test_hrex_save_and_load(mpicomm):
 
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
@@ -63,13 +64,12 @@ def test_hrex_save_and_load():
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
 
-    mpicomm = dummympi.DummyMPIComm()
     replica_exchange = hamiltonian_exchange.HamiltonianExchange.create_repex(state, systems, positions, nc_filename, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 200
     replica_exchange.run()
 
     
-    replica_exchange = hamiltonian_exchange.HamiltonianExchange.resume_repex(nc_filename)
+    replica_exchange = hamiltonian_exchange.HamiltonianExchange.resume_repex(nc_filename, mpicomm=mpicomm)
     eq(replica_exchange.iteration, 200)
     replica_exchange.number_of_iterations = 300
     replica_exchange.run()

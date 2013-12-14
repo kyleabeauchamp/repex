@@ -33,7 +33,7 @@ import copy
 import numpy as np
 import numpy.linalg
 
-import simtk.openmm 
+import simtk.openmm as mm
 import simtk.unit as units
 
 import logging
@@ -85,7 +85,7 @@ class ThermodynamicState(object):
 
     """
     
-    def __init__(self, system=None, temperature=None, pressure=None, mm=None):
+    def __init__(self, system=None, temperature=None, pressure=None,):
         """
         Initialize the thermodynamic state.
 
@@ -105,17 +105,9 @@ class ThermodynamicState(object):
         self.temperature = None     # the temperature
         self.pressure = None        # the pressure, or None if not isobaric
 
-        self._mm = None             # Cached OpenMM implementation
-
         self._cache_context = True  # if True, try to cache Context object
         self._context = None        # cached Context
         self._integrator = None     # cached Integrator
-
-        # Store OpenMM implementation.
-        if mm:
-            self._mm = mm
-        else:
-            self._mm = simtk.openmm
 
         # Store provided values.
         if system is not None:
@@ -134,7 +126,7 @@ class ThermodynamicState(object):
             for force_index in range(self.system.getNumForces()):
                 force = self.system.getForce(force_index)
                 # Dispatch forces
-                if isinstance(force, self._mm.MonteCarloBarostat):
+                if isinstance(force, mm.MonteCarloBarostat):
                     barostat = force
                     break
             if barostat:
@@ -143,7 +135,7 @@ class ThermodynamicState(object):
                 barostat.setTemperature(temperature)                
             else:
                 # Create barostat.
-                barostat = self._mm.MonteCarloBarostat(pressure, temperature)
+                barostat = mm.MonteCarloBarostat(pressure, temperature)
                 self.system.addForce(barostat)                    
 
         return
@@ -168,13 +160,13 @@ class ThermodynamicState(object):
 
         # Create an integrator.
         timestep = 1.0 * units.femtosecond
-        self._integrator = self._mm.VerletIntegrator(timestep)        
+        self._integrator = mm.VerletIntegrator(timestep)        
             
         # Create a new OpenMM context.
         if platform:                
-            self._context = self._mm.Context(self.system, self._integrator, platform)
+            self._context = mm.Context(self.system, self._integrator, platform)
         else:
-            self._context = self._mm.Context(self.system, self._integrator)
+            self._context = mm.Context(self.system, self._integrator)
             
         logger.debug("_create_context created a new integrator and context")
 
@@ -195,7 +187,7 @@ class ThermodynamicState(object):
 
         return potential_energy
     
-    def reduced_potential(self, coordinates, box_vectors=None, mm=None, platform=None):
+    def reduced_potential(self, coordinates, box_vectors=None, platform=None):
         """
         Compute the reduced potential for the given coordinates in this thermodynamic state.
 
@@ -266,9 +258,6 @@ class ThermodynamicState(object):
         
         """
 
-        # Select OpenMM implementation if not specified.
-        if mm is None: mm = simtk.openmm
-
         # If pressure is specified, ensure box vectors have been provided.
         if (self.pressure is not None) and (box_vectors is None):
             raise ParameterException("box_vectors must be specified if constant-pressure ensemble.")
@@ -303,7 +292,7 @@ class ThermodynamicState(object):
 
         return reduced_potential
 
-    def reduced_potential_multiple(self, coordinates_list, box_vectors_list=None, mm=None, platform=None):
+    def reduced_potential_multiple(self, coordinates_list, box_vectors_list=None, platform=None):
         """
         Compute the reduced potential for the given sets of coordinates in this thermodynamic state.
         This can pontentially be more efficient than repeated calls to reduced_potential.
@@ -363,9 +352,6 @@ class ThermodynamicState(object):
         * Instead of requiring configuration and box_vectors be passed separately, develop a Configuration or Snapshot class.
         
         """
-
-        # Select OpenMM implementation if not specified.
-        if mm is None: mm = simtk.openmm
 
         # If pressure is specified, ensure box vectors have been provided.
         if (self.pressure is not None) and (box_vectors_list is None):
@@ -506,12 +492,3 @@ class ThermodynamicState(object):
         A = np.array([a/a.unit, b/a.unit, c/a.unit])
         volume = np.linalg.det(A) * a.unit**3
         return volume
-
-#=============================================================================================
-# MAIN AND TESTS
-#=============================================================================================
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
-

@@ -868,17 +868,21 @@ class ReplicaExchange(object):
         kwargs (dict) - Optional parameters to use for specifying simulation
             Provided keywords will be matched to object variables to replace defaults.
             
-        """     
-        if mpicomm is None or (mpicomm.rank == 0):
+        """
+        if mpicomm is None:
+            mpicomm = dummympi.DummyMPIComm()
+        
+        if mpicomm.rank == 0:
             database = netcdf_io.NetCDFDatabase(filename, **kwargs)  # To do: eventually use factory for looking up database type via filename
-            thermodynamic_states, coordinates = database.thermodynamic_states, database.coordinates 
+            thermodynamic_states, coordinates, iteration = database.thermodynamic_states, database.coordinates, database.iteration
         else:
-            thermodynamic_states = None
-            coordinates = None
-            thermodynamic_states = mpicomm.bcast(thermodynamic_states, root=0)
-            coordinates = mpicomm.bcast(coordinates, root=0)
+            database, thermodynamic_states, coordinates, iteration = None, None, None, None
+
+        thermodynamic_states = mpicomm.bcast(thermodynamic_states, root=0)
+        coordinates = mpicomm.bcast(coordinates, root=0)
+        iteration = mpicomm.bcast(iteration, root=0)
 
         repex = cls(thermodynamic_states, coordinates, database, mpicomm=mpicomm, **kwargs)
-        repex.iteration = database.iteration
+        repex.iteration = iteration
         repex._initialize()
         return repex
