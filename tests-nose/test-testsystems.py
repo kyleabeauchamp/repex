@@ -5,7 +5,7 @@ from repex.parallel_tempering import ParallelTempering
 from repex import testsystems
 from repex import dummympi
 import tempfile
-from mdtraj.testing import eq
+from mdtraj.testing import eq, skipif
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -24,6 +24,8 @@ def test_properties_all_testsystems():
                 logging.info("%32s . %32s : %32s" % (class_name, property_name, str(method(state))))
 
 
+fast_testsystems = ["HarmonicOscillator", "PowerOscillator", "Diatom", "ConstraintCoupledHarmonicOscillator", "HarmonicOscillatorArray", "SodiumChlorideCrystal", "LennardJonesCluster", "LennardJonesFluid", "IdealGas", "AlanineDipeptideVacuum"]
+
 def test_parallel_tempering_all_testsystems():
     T_min = 1.0 * u.kelvin
     T_max = 10.0 * u.kelvin
@@ -33,8 +35,12 @@ def test_parallel_tempering_all_testsystems():
     
     for testsystem_class in testsystem_classes:
         class_name = testsystem_class.__name__
-        logging.info("Testing replica exchange with testsystem %s" % class_name)
-        
+        if class_name in fast_testsystems:
+            logging.info("Testing replica exchange with testsystem %s" % class_name)
+        else:
+            logging.info("Skipping replica exchange with testsystem %s." % class_name)
+            continue
+            
         testsystem = testsystem_class()
         
         system = testsystem.system
