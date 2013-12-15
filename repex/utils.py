@@ -4,6 +4,7 @@ import time
 
 import numpy as np
 
+import simtk.openmm as mm
 import simtk.unit as units
 
 from mdtraj.utils import ensure_type
@@ -81,3 +82,9 @@ def permute_energies(X, s):
         u[i] = X[i, si_inv]
     
     return u
+
+def str_to_system(system_string):
+    """Rebuild an OpenMM System from string representation."""
+    system = mm.System() 
+    system.__setstate__(system_string)
+    return system

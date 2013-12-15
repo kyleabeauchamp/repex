@@ -55,11 +55,6 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann consta
 # Thermodynamic state description
 #=============================================================================================
 
-def str_to_system(system_string):
-    """Rebuild an OpenMM System from string representation."""
-    system = mm.System() 
-    system.__setstate__(system_string)
-    return system
 
 class ThermodynamicState(object):
     """

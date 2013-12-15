@@ -11,7 +11,7 @@ import simtk.unit as units
 import netCDF4 as netcdf
 
 from thermodynamics import ThermodynamicState
-from utils import time_and_print, process_kwargs, fix_coordinates
+from utils import time_and_print, process_kwargs, fix_coordinates, str_to_system
 from version import version as __version__
 
 import logging
@@ -207,6 +207,7 @@ class NetCDFDatabase(object):
             
             # Reconstitute System object.
             system = str(ncgrp_stateinfo.variables['systems'][state_index])
+            system = str_to_system(system)
             
             state = ThermodynamicState(system=system, temperature=temperature, pressure=pressure)
 
