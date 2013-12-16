@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import time
+import os
 
 import numpy as np
 
@@ -8,6 +9,8 @@ import simtk.openmm as mm
 import simtk.unit as units
 
 from mdtraj.utils import ensure_type
+
+from pkg_resources import resource_filename
 
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
 
@@ -83,8 +86,31 @@ def permute_energies(X, s):
     
     return u
 
+
 def str_to_system(system_string):
     """Rebuild an OpenMM System from string representation."""
     system = mm.System() 
     system.__setstate__(system_string)
     return system
+
+
+def get_data_filename(relative_path):
+    """Get the full path to one of the reference files in testsystems.
+
+    In the source distribution, these files are in ``repex/data/*/``,
+    but on installation, they're moved to somewhere in the user's python
+    site-packages directory.
+
+    Parameters
+    ----------
+    name : str
+        Name of the file to load (with respect to the repex folder).
+
+    """
+
+    fn = resource_filename('repex', relative_path)
+
+    if not os.path.exists(fn):
+        raise ValueError("Sorry! %s does not exist. If you just added it, you'll have to re-install" % fn)
+
+    return fn

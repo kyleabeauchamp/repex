@@ -60,6 +60,8 @@ import simtk.openmm as mm
 import simtk.unit as units
 import simtk.openmm.app as app
 
+from repex.utils import get_data_filename
+
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA 
 
 #=============================================================================================
@@ -1630,10 +1632,8 @@ class AlanineDipeptideVacuum(TestSystem):
 
     def __init__(self, constraints=app.HBonds):
 
-        # Determine prmtop and crd filenames in test directory.
-        # TODO: This will need to be revised in order to be able to find the test systems.
-        prmtop_filename = os.path.join(os.path.dirname(__file__), 'data', 'alanine-dipeptide-gbsa', 'alanine-dipeptide.prmtop')
-        crd_filename = os.path.join(os.path.dirname(__file__), 'data', 'alanine-dipeptide-gbsa', 'alanine-dipeptide.crd')
+        prmtop_filename = get_data_filename("data/alanine-dipeptide-gbsa/alanine-dipeptide.prmtop")
+        crd_filename = get_data_filename("data/alanine-dipeptide-gbsa/alanine-dipeptide.crd")
 
         prmtop = app.AmberPrmtopFile(prmtop_filename)
         system = prmtop.createSystem(implicitSolvent=None, constraints=constraints, nonbondedCutoff=None)
@@ -1664,10 +1664,8 @@ class AlanineDipeptideImplicit(TestSystem):
 
     def __init__(self, constraints=app.HBonds):
 
-        # Determine prmtop and crd filenames in test directory.
-        # TODO: This will need to be revised in order to be able to find the test systems.
-        prmtop_filename = os.path.join(os.path.dirname(__file__), 'data', 'alanine-dipeptide-gbsa', 'alanine-dipeptide.prmtop')
-        crd_filename = os.path.join(os.path.dirname(__file__), 'data', 'alanine-dipeptide-gbsa', 'alanine-dipeptide.crd')
+        prmtop_filename = get_data_filename("data/alanine-dipeptide-gbsa/alanine-dipeptide.prmtop")
+        crd_filename = get_data_filename("data/alanine-dipeptide-gbsa/alanine-dipeptide.crd")        
 
         # Initialize system.
         
@@ -1704,10 +1702,8 @@ class AlanineDipeptideExplicit(TestSystem):
 
     def __init__(self, constraints=app.HBonds, rigid_water=True, nonbondedCutoff=9.0 * units.angstroms, use_dispersion_correction=True):
 
-        # Determine prmtop and crd filenames in test directory.
-        # TODO: This will need to be revised in order to be able to find the test systems.
-        prmtop_filename = os.path.join(os.path.dirname(__file__), 'data', 'alanine-dipeptide-explicit', 'alanine-dipeptide.prmtop')
-        crd_filename = os.path.join(os.path.dirname(__file__), 'data', 'alanine-dipeptide-explicit', 'alanine-dipeptide.crd')
+        prmtop_filename = get_data_filename("data/alanine-dipeptide-explicit/alanine-dipeptide.prmtop")
+        crd_filename = get_data_filename("data/alanine-dipeptide-explicit/alanine-dipeptide.crd")        
 
         # Initialize system.
         
@@ -1748,10 +1744,9 @@ class LysozymeImplicit(TestSystem):
     """
 
     def __init__(self, flexibleConstraints=True, shake='h-bonds'):
-        # Determine prmtop and crd filenames in test directory.
-        # TODO: This will need to be revised in order to be able to find the test systems.
-        prmtop_filename = os.path.join(os.path.dirname(__file__), 'data',  'T4-lysozyme-L99A-implicit', 'complex.prmtop')
-        crd_filename = os.path.join(os.path.dirname(__file__), 'data',  'T4-lysozyme-L99A-implicit', 'complex.crd')
+
+        prmtop_filename = get_data_filename("data/T4-lysozyme-L99A-implicit/complex.prmtop")
+        crd_filename = get_data_filename("data/T4-lysozyme-L99A-implicit/complex.crd")
 
         # Initialize system.
         
@@ -1776,12 +1771,7 @@ class SrcImplicit(TestSystem):
     
     def __init__(self):
 
-        # Determine prmtop and crd filenames in test directory.
-        # TODO: This will need to be revised in order to be able to find the test systems.
-        pdb_filename = os.path.join(os.path.dirname(__file__), 'data',  'src-implicit', 'implicit-refined.pdb')
-
-        # Read PDB.
-        
+        pdb_filename = get_data_filename("data/src-implicit/implicit-refined.pdb")
         pdbfile = app.PDBFile(pdb_filename)
 
         # Construct system.
@@ -1808,10 +1798,9 @@ class SrcExplicit(TestSystem):
 
     """
     def __init__(self):
-        # Determine prmtop and crd filenames in test directory.
-        # TODO: This will need to be revised in order to be able to find the test systems.
-        system_xml_filename = os.path.join(os.path.dirname(__file__), 'data',  'src-explicit', 'system.xml')
-        state_xml_filename = os.path.join(os.path.dirname(__file__), 'data',  'src-explicit', 'state.xml')
+
+        system_xml_filename = get_data_filename("data/src-explicit/system.xml")
+        state_xml_filename = get_data_filename("data/src-explicit/state.xml")        
 
         # Read system.
         infile = open(system_xml_filename, 'r')
@@ -1852,12 +1841,10 @@ class MethanolBox(TestSystem):
 
     def __init__(self, flexibleConstraints=True, shake='h-bonds', nonbondedCutoff=7.0 * units.angstroms, nonbondedMethod='CutoffPeriodic'):
 
-        # Determine prmtop and crd filenames in test directory.
-        # TODO: This will need to be revised in order to be able to find the test systems.
         system_name = 'methanol-box'
-        prmtop_filename = os.path.join(os.path.dirname(__file__), 'data',  system_name, system_name + '.prmtop')
-        crd_filename = os.path.join(os.path.dirname(__file__), 'data',  system_name, system_name + '.crd')
-
+        prmtop_filename = get_data_filename("data/%s/%s.prmtop" % (system_name, system_name))
+        crd_filename = get_data_filename("data/%s/%s.crd" % (system_name, system_name))
+        
         # Initialize system.
         
         prmtop = app.AmberPrmtopFile(prmtop_filename)
@@ -1896,11 +1883,9 @@ class MolecularIdealGas(TestSystem):
 
     def __init__(self, flexibleConstraints=True, shake=None, nonbondedCutoff=7.0 * units.angstroms, nonbondedMethod='CutoffPeriodic'):
 
-        # Determine prmtop and crd filenames in test directory.
-        # TODO: This will need to be revised in order to be able to find the test systems.
         system_name = 'methanol-box'
-        prmtop_filename = os.path.join(os.path.dirname(__file__), 'data', system_name, system_name + '.prmtop')
-        crd_filename = os.path.join(os.path.dirname(__file__), 'data', system_name, system_name + '.crd')
+        prmtop_filename = get_data_filename("data/%s/%s.prmtop" % (system_name, system_name))
+        crd_filename = get_data_filename("data/%s/%s.crd" % (system_name, system_name))
 
         # Initialize system.
         
