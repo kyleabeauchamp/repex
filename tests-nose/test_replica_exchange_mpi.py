@@ -6,18 +6,25 @@ from repex import testsystems
 from repex.utils import permute_energies
 import tempfile
 from mdtraj.testing import eq, skipif
-import sys
+import nose
+
+test_mpi = True
 
 try:
     from repex.mpinoseutils import mpitest    
 except:
-    sys.exit()
+    test_mpi = False
 
 import distutils.spawn
 mpiexec = distutils.spawn.find_executable("mpiexec")
 
 if mpiexec is None:
-    sys.exit()
+    test_mpi = False
+
+def setup():
+    if test_mpi == False:
+        raise nose.SkipTest('No MPI detected; skipping MPI tests.')
+
 
 @mpitest(2)
 def test_harmonic_oscillators(mpicomm):
