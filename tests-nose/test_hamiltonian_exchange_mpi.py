@@ -4,10 +4,21 @@ from repex.thermodynamics import ThermodynamicState
 from repex import hamiltonian_exchange
 from repex import testsystems
 from repex.utils import permute_energies
-from repex.mpinoseutils import mpitest
 import tempfile
 from mdtraj.testing import eq
 from repex.constants import kB
+import sys
+
+try:
+    from repex.mpinoseutils import mpitest    
+except:
+    sys.exit()
+
+import distutils.spawn
+mpiexec = distutils.spawn.find_executable("mpiexec")
+
+if mpiexec is None:
+    sys.exit()
 
 @mpitest(2)
 def test_power_oscillators(mpicomm):
