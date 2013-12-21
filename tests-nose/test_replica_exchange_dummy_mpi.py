@@ -7,13 +7,11 @@ from repex.utils import permute_energies
 from repex import dummympi
 import tempfile
 from mdtraj.testing import eq
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 def test_harmonic_oscillators():
-    """Test harmonic oscillator reduced potentials at temperatures 1K, 10K, 100K."""
-    """Note: one should test with n_replicas >= 3 because permutation math
-    is trivial for n = 2 (permutation = inverse(permutation))
-    """
-
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
     T_min = 1.0 * unit.kelvin
@@ -39,7 +37,7 @@ def test_harmonic_oscillators():
 
     u = permute_energies(u_permuted, s)
 
-    u0 = np.array([[ho.get_reduced_potential_expectation(s0, s1) for s1 in states] for s0 in states])
+    u0 = np.array([[ho.reduced_potential_expectation(s0, s1) for s1 in states] for s0 in states])
 
     l0 = np.log(u0)  # Compare on log scale because uncertainties are proportional to values
     l1 = np.log(u.mean(0))

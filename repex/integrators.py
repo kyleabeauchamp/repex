@@ -45,7 +45,7 @@ import time
 import simtk.unit
 
 import simtk.unit as units
-import simtk.openmm as openmm
+import simtk.openmm as mm
 from simtk.openmm import app
 
 from repex import testsystems
@@ -92,7 +92,7 @@ def VelocityVerletIntegrator(timestep=1.0*simtk.unit.femtoseconds):
 
     """
     
-    integrator = openmm.CustomIntegrator(timestep)
+    integrator = mm.CustomIntegrator(timestep)
 
     integrator.addPerDofVariable("x1", 0)
 
@@ -146,7 +146,7 @@ def AndersenVelocityVerletIntegrator(temperature=298*simtk.unit.kelvin, collisio
 
     """
     
-    integrator = openmm.CustomIntegrator(timestep)
+    integrator = mm.CustomIntegrator(timestep)
 
     #
     # Integrator initialization.
@@ -219,7 +219,7 @@ def MetropolisMonteCarloIntegrator(temperature=298.0*simtk.unit.kelvin, sigma=0.
     """
     
     # Create a new Custom integrator.
-    integrator = openmm.CustomIntegrator(timestep)
+    integrator = mm.CustomIntegrator(timestep)
 
     # Compute the thermal energy.
     kT = kB * temperature
@@ -314,7 +314,7 @@ def HMCIntegrator(temperature=298.0*simtk.unit.kelvin, nsteps=10, timestep=1*sim
     """
         
     # Create a new custom integrator.
-    integrator = openmm.CustomIntegrator(timestep)
+    integrator = mm.CustomIntegrator(timestep)
 
     # Compute the thermal energy.
     kT = kB * temperature
@@ -439,7 +439,7 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     gamma = collision_rate
 
     # Create a new custom integrator.
-    integrator = openmm.CustomIntegrator(timestep)
+    integrator = mm.CustomIntegrator(timestep)
 
     #
     # Integrator initialization.
@@ -562,7 +562,7 @@ def VVVRIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     gamma = collision_rate
     
     # Create a new custom integrator.
-    integrator = openmm.CustomIntegrator(timestep)
+    integrator = mm.CustomIntegrator(timestep)
     
     #
     # Integrator initialization.

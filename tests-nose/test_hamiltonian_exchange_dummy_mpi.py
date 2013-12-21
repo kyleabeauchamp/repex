@@ -11,7 +11,6 @@ from repex.constants import kB
 
 
 def test_power_oscillators():
-    """Test HREX with power oscillators reduced potentials."""
 
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 

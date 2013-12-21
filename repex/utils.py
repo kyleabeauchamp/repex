@@ -1,57 +1,18 @@
 #!/usr/bin/env python
 
 import time
+import os
 
 import numpy as np
 
-import simtk.openmm 
+import simtk.openmm as mm
 import simtk.unit as units
 
 from mdtraj.utils import ensure_type
 
+from pkg_resources import resource_filename
+
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
-
-def generate_maxwell_boltzmann_velocities(system, temperature):
-    """
-    Generate Maxwell-Boltzmann velocities.
-
-    ARGUMENTS
-
-    system (simtk.openmm.System) - the system for which velocities are to be assigned
-    temperature (simtk.unit.Quantity with units temperature) - the temperature at which velocities are to be assigned
-
-    RETURN VALUES
-
-    velocities (simtk.unit.Quantity wrapping numpy array of dimension natoms x 3 with units of distance/time) - drawn from the Maxwell-Boltzmann distribution at the appropriate temperature
-
-    """
-
-    # Get number of atoms
-    natoms = system.getNumParticles()
-
-    # Decorate System object with vector of masses for efficiency.
-    if not hasattr(system, 'masses'):
-        masses = simtk.unit.Quantity(np.zeros([natoms,3], np.float64), units.amu)
-        for atom_index in range(natoms):
-            mass = system.getParticleMass(atom_index) # atomic mass
-            masses[atom_index,:] = mass
-        setattr(system, 'masses', masses)
-
-    # Retrieve masses.
-    masses = getattr(system, 'masses')
-
-    # Compute thermal energy and velocity scaling factors.
-    kT = kB * temperature # thermal energy
-    sigma2 = kT / masses
-
-    # Assign velocities from the Maxwell-Boltzmann distribution.
-    # TODO: This is wacky because units.sqrt cannot operate on np vectors.
-    
-    velocity_unit = units.nanometers / units.picoseconds
-    velocities = units.Quantity(np.sqrt(sigma2 / (velocity_unit**2)) * np.random.randn(natoms, 3), velocity_unit)
-    
-    return velocities
-
 
 
 def time_and_print(x):
@@ -84,8 +45,6 @@ default_options["show_energies"] = True
 default_options["show_mixing_statistics"] = True
 default_options["platform"] = None
 default_options["integrator"] = None
-default_options["mpicomm"] = None
-
 
 
 def process_kwargs(kwargs):
@@ -126,3 +85,32 @@ def permute_energies(X, s):
         u[i] = X[i, si_inv]
     
     return u
+
+
+def str_to_system(system_string):
+    """Rebuild an OpenMM System from string representation."""
+    system = mm.System() 
+    system.__setstate__(system_string)
+    return system
+
+
+def get_data_filename(relative_path):
+    """Get the full path to one of the reference files in testsystems.
+
+    In the source distribution, these files are in ``repex/data/*/``,
+    but on installation, they're moved to somewhere in the user's python
+    site-packages directory.
+
+    Parameters
+    ----------
+    name : str
+        Name of the file to load (with respect to the repex folder).
+
+    """
+
+    fn = resource_filename('repex', relative_path)
+
+    if not os.path.exists(fn):
+        raise ValueError("Sorry! %s does not exist. If you just added it, you'll have to re-install" % fn)
+
+    return fn

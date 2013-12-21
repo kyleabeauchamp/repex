@@ -6,9 +6,28 @@ from repex import testsystems
 from repex.utils import permute_energies
 import tempfile
 from mdtraj.testing import eq
+import nose
+
+test_mpi = True
+
+try:
+    from repex.mpinoseutils import mpitest    
+except:
+    test_mpi = False
+
+import distutils.spawn
+mpiexec = distutils.spawn.find_executable("mpiexec")
+
+if mpiexec is None:
+    test_mpi = False
+
+def setup():
+    if test_mpi == False:
+        raise nose.SkipTest('No MPI detected; skipping MPI tests.')
 
 
-def test_parallel_tempering():
+@mpitest(2)
+def test_parallel_tempering(mpicomm):
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
     T_min = 1.0 * unit.kelvin
@@ -23,7 +42,7 @@ def test_parallel_tempering():
 
     coordinates = [positions] * n_temps
 
-    replica_exchange = ParallelTempering.create_repex(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, **{})
+    replica_exchange = ParallelTempering.create_repex(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
     
     eq(replica_exchange.n_replicas, n_temps)
 
@@ -36,14 +55,14 @@ def test_parallel_tempering():
     u = permute_energies(u_permuted, s)
 
     states = replica_exchange.states
-    u0 = np.array([[ho.get_reduced_potential_expectation(s0, s1) for s1 in states] for s0 in states])
+    u0 = np.array([[ho.reduced_potential_expectation(s0, s1) for s1 in states] for s0 in states])
 
     l0 = np.log(u0)  # Compare on log scale because uncertainties are proportional to values
     l1 = np.log(u.mean(0))
     eq(l0, l1, decimal=1)
 
-
-def test_parallel_tempering_save_and_load():
+@mpitest(2)
+def test_parallel_tempering_save_and_load(mpicomm):
 
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
@@ -58,18 +77,18 @@ def test_parallel_tempering_save_and_load():
 
 
     coordinates = [positions] * n_temps
-
-    replica_exchange = ParallelTempering.create_repex(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, **{})
+    
+    replica_exchange = ParallelTempering.create_repex(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 200
     replica_exchange.run()
     
-    replica_exchange = ParallelTempering.resume_repex(nc_filename)
+    replica_exchange = ParallelTempering.resume_repex(nc_filename, mpicomm=mpicomm)
     eq(replica_exchange.iteration, 200)
     replica_exchange.number_of_iterations = 300
     replica_exchange.run()
 
-
-def test_parallel_tempering_explicit_temperature_input():
+@mpitest(2)
+def test_parallel_tempering_explicit_temperature_input(mpicomm):
 
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
@@ -84,7 +103,7 @@ def test_parallel_tempering_explicit_temperature_input():
 
     coordinates = [positions] * n_temps
 
-    replica_exchange = ParallelTempering.create_repex(system, coordinates, nc_filename, temperatures=temperatures, **{})
+    replica_exchange = ParallelTempering.create_repex(system, coordinates, nc_filename, temperatures=temperatures, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 100
     replica_exchange.run()
     
