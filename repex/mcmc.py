@@ -13,11 +13,9 @@ This module provides a framework for equilibrium sampling from a given thermodyn
 a biomolecule using a Markov chain Monte Carlo scheme.
 
 CAPABILITIES
-* molecular dynamics [assumed to be free of integration error]
+* Langevin dynamics [assumed to be free of integration error; use at your own risk]
 * hybrid Monte Carlo
 * generalized hybrid Monte Carlo
-* sidechain rotamer switching
-* constant-pH
 
 NOTES
 
@@ -117,19 +115,110 @@ class ParameterException(Exception):
 
 class MCMCSamplerState(object):
     """
-    Sampler state for MCMC move.
+    Sampler state for MCMC move representing everything that may be allowed to change during
+    the simulation.
 
     Parameters
     ----------
-
+    positions : array of simtk.unit.Quantity compatible with nanometers
+       Particle positions.
+    velocities : optional, array of simtk.unit.Quantity compatible with nanometers/picoseconds
+       Particle velocities.
+    box_vectors : optional, 3x3 array of simtk.unit.Quantity compatible with nanometers
+       Current box vectors.
+    system : optional, simtk.openmm.System 
+       Current system specifying force calculations.    
     
+    Examples
+    --------
+
+    >>> # Create a test system
+    >>> import testsystems
+    >>> [system, positions] = testsystems.AlanineDipeptideVacuum()
+    >>> # Create a sampler state manually.
+    >>> box_vectors = system.getDefaultPeriodicBoxVectors()
+    >>> sampler_state = MCMCSamplerState(positions, box_vectors, system)
+
     """
     def __init__(self, positions, velocities=None, box_vectors=None, system=None):
         self.positions = positions
         self.velocities = velocities
         self.box_vectors = box_vectors
         self.system = system
-    
+
+    @classmethod
+    def createFromContext(context):
+        """
+        Create an MCMCSamplerState object from the information in a current OpenMM Context object.
+        
+        Parameters
+        ----------
+        context : simtk.openmm.Context
+           The Context object from which to create a sampler state.
+           
+        Returns
+        -------
+        sampler_state : MCMCSamplerState
+           The sampler state containing positions, velocities, and box vectors.
+
+        Examples
+        --------
+
+        >>> # Create a test system
+        >>> import testsystems
+        >>> [system, positions] = testsystems.AlanineDipeptideVacuum()
+        >>> # Create a Context.
+        >>> import simtk.openmm as mm
+        >>> import simtk.unit as u
+        >>> integrator = mm.VerletIntegrator(1.0 * u.femtoseconds)
+        >>> context = mm.Context(system, integrator)
+        >>> # Set positions and velocities.
+        >>> context.setPositions(positions)
+        >>> context.setVelocitiesToTemperature(298 * u.kelvin)
+        >>> # Create a sampler state from the Context.
+        >>> sampler_state = MCMCSamplerState.createFromContext(context)
+        >>> # Clean up.
+        >>> del context, integrator
+
+        """
+        openmm_state = context.getState(getPositions=True, getVelocities=True)
+        
+        positions = openmm_state.getPositions(asNumpy=True)
+        velocities = openmm_state.getVelocities(asNumpy=True)
+        box_vectors = openmm_state.getPeriodicBoxVectors(asNumpy=True)
+        system = context.getSystem()
+
+        return SamplerState(positions, velocities, box_vectors, system)
+
+    def createContext(integrator, platform=None):
+        """
+        Create an OpenMM Context object from the current sampler state.
+
+        Parameters
+        ----------
+        integrator : simtk.openmm.Integrator
+           The integrator to use for Context creation.
+        platform : simtk.openmm.Platform, optional, default=None
+           If specified, the Platform to use for context creation.
+
+        Returns
+        -------
+        context : simtk.openmm.Context
+           The created OpenMM Context object
+        """
+
+        if not self.system:
+            raise Exception("MCMCSamplerState must have a 'system' object specified to create a Context")
+
+        if platform:
+            context = mm.Context(self.system, integrator, platform)
+        else:
+            context = mm.Context(self.system, integrator)
+        
+        context.setPositions(self.positions)
+        if self.velocities: context.setVelocities(self.velocities)
+        if self.box_vectors: context.setPeriodic BoxVectors(self.box_vectors)
+
 #=============================================================================================
 # Monte Carlo Move abstract base class
 #=============================================================================================
@@ -146,7 +235,18 @@ class MCMCMove(object):
     def apply(self, thermodynamic_state, sampler_state):
         """
         Apply the MCMC move.
-        
+
+        Parameters
+        ----------
+        thermodynamic_state : ThermodynamicState
+           The thermodynamic state to use when applying the MCMC move
+        sampler_state : MCMCSamplerState
+           The sampler state to apply the move to
+
+        Returns
+        -------
+        updated_sampler_state : MCMCSamplerState
+           The updated sampler state
         """
         pass
 
@@ -181,7 +281,7 @@ class MCMCSampler(object):
         # Store the move set.
         if type(move_set) not in [list, dict]:
             raise Exception("move_set must be list or dict")
-        # TODO: Make deep copy?
+        # TODO: Make deep copy of the move set?
         self.move_set = move_set
         
         return
@@ -247,7 +347,7 @@ class LangevinDynamicsMove(MCMCMove):
 
     """
 
-    def __init__(self, timestep=1.0*simtk.unit.femtosecond, collision_rate=10.0/simtk.unit.picoseconds, nsteps=1000):
+    def __init__(self, timestep=1.0*simtk.unit.femtosecond, collision_rate=10.0/simtk.unit.picoseconds, nsteps=1000, reassign_velocities=False):
         """
         Parameters
         ----------
@@ -257,6 +357,8 @@ class LangevinDynamicsMove(MCMCMove):
             The collision rate with fictitious bath particles.
         nsteps : int, optional, default = 1000 
             The number of integration timesteps to take each time the move is applied.
+        reassign_velocities : bool, optional, default = False
+            If True, the velocities will be reassigned from the Maxwell-Boltzmann distribution at the beginning of the move.
 
         Note
         ----
@@ -267,86 +369,47 @@ class LangevinDynamicsMove(MCMCMove):
         self.timestep = timestep
         self.collision_rate = collision_rate
         self.nsteps = nsteps
+        self.reassign_velocities = reassign_velocities
 
         return
 
-    def _assign_Maxwell_Boltzmann_velocities(self, system, temperature):
-        """Generate Maxwell-Boltzmann velocities.
-
-        @param system the system for which velocities are to be assigned
-        @type simtk.chem.openmm.System or System
+    def apply(self, thermodynamic_state, sampler_state):
+        """Update the sampler state using Langevin dynamics.
         
-        @param temperature the temperature at which velocities are to be assigned
-        @type Quantity with units of temperature
-
-        @return velocities drawn from the Maxwell-Boltzmann distribution at the appropriate temperature
-        @returntype (natoms x 3) numpy array wrapped in Quantity with units of velocity
-
-        TODO
-
-        This could be sped up by introducing vector operations.
-
-        """
-
-        # Get number of atoms
-        natoms = system.getNumParticles()
-
-        # Create storage for velocities.        
-        velocities = units.Quantity(numpy.zeros([natoms, 3], numpy.float32), units.nanometer / units.picosecond) # velocities[i,k] is the kth component of the velocity of atom i
-  
-        # Compute thermal energy and inverse temperature from specified temperature.
-        kT = kB * temperature # thermal energy
-        beta = 1.0 / kT # inverse temperature
-  
-        # Assign velocities from the Maxwell-Boltzmann distribution.
-        for atom_index in range(natoms):
-            mass = system.getParticleMass(atom_index) # atomic mass
-            sigma = units.sqrt(kT / mass) # standard deviation of velocity distribution for each coordinate for this atom
-            for k in range(3):
-                velocities[atom_index,k] = sigma * numpy.random.normal()
-
-        # Return velocities
-        return velocities
-
-    def run(self, state, positions):
-        """
-        Apply move to the specified system and coordinates.
-
-        ARGUMENTS
-
-        state (ThermodynamicState) - thermodynamic state
-        positions (Quantity of numpy array) - current positions
-        
-        RETURNS
-
-        new_positions
-
+        Parameters
+        ----------
+        thermodynamic_state : ThermodynamicState
+            The thermodynamic state specifying the System, temperature, pressure (if applicable), etc.
+        sampler_state : SamplerState
+            The current state of the sampler.
+            
+        Returns
+        -------
+            
+        updated_sampler_state : SamplerState
+            The updated state of the sampler.
         """
         
         # Create integrator.
         integrator = openmm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)
 
         # Create context.
-        context = Context(state.system, integrator)
-        
-        # Set coordinates.
-        context.setPositions(positions)
+        context = sampler_state.createContext(integrator)
 
-        # Assign Maxwell-Boltzmann velocities.
-        velocities = self._assign_Maxwell_Boltzmann_velocities(state.system, state.temperature)
-        context.setVelocities(velocities)
+        if self.reassign_velocities:
+            # Assign Maxwell-Boltzmann velocities.        
+            context.setVelocitiesToTemperature(state.temperature)
         
         # Run dynamics.
         integrator.step(self.number_of_steps_per_iteration)
         
-        # Get coordinates.
-        openmm_state = context.getState(getPositions=True)
-        new_positions = openmm_state.getPositions(asNumpy=True)
+        # Get updated sampler state.
+        updated_sampler_state = MCMCSamplerState.createFromContext(context)
 
         # Clean up.
-        del context, integrator, openmm_state
+        del context
 
-        return new_positions
+        return updated_sampler_state
     
 #=============================================================================================
 # Hybrid Monte Carlo move
@@ -361,7 +424,7 @@ class HMCMove(MCMCMove):
 
     """
 
-    def __init__(self, reference_system, temperature, timestep, nsteps):
+    def __init__(self, timestep=1.0*simtk.unit.femtosecond, nsteps=1000):
         """
 
         """
