@@ -33,7 +33,7 @@ import copy
 import numpy as np
 import numpy.linalg
 
-import simtk.openmm as mm
+import simtk.openmm 
 import simtk.unit as units
 
 import logging
@@ -55,12 +55,11 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann consta
 # Thermodynamic state description
 #=============================================================================================
 
-
 class ThermodynamicState(object):
-    """Object describing a thermodynamic state obeying Boltzmann statistics.
+    """
+    Data specifying a thermodynamic state obeying Boltzmann statistics.
 
-    Examples
-    --------
+    EXAMPLES
 
     Specify an NVT state for a water box at 298 K.
 
@@ -75,33 +74,29 @@ class ThermodynamicState(object):
     
     Note that the pressure is only relevant for periodic systems.
 
-    Notes
-    -----
+    NOTES
 
     This state object cannot describe states obeying non-Boltzamnn statistics, such as Tsallis statistics.
 
-    ToDo
-    ----
+    TODO
 
     * Implement a more fundamental ProbabilityState as a base class?
     * Implement pH.
 
     """
     
-    def __init__(self, system, temperature, pressure=None,):
-        """Construct a thermodynamic state with given system and temperature.
+    def __init__(self, system=None, temperature=None, pressure=None, mm=None):
+        """
+        Initialize the thermodynamic state.
 
-        Parameters
-        ----------
+        OPTIONAL ARGUMENTS
 
-        system : simtk.openmm.System
-            System object describing the potential energy function
-            for the system (default: None)
-        temperature : simtk.unit.Quantity, compatible with 'kelvin'
-            Temperature for a system with constant temperature
-        pressure : simtk.unit.Quantity,  compatible with 'atmospheres', optional, default=None
-            If not None, specifies the pressure for constant-pressure systems.
+        system (simtk.openmm.System) - a System object describing the potential energy function for the system (default: None)
+        temperature (simtk.unit.Quantity compatible with 'kelvin') - the temperature for a system with constant temperature (default: None)
+        pressure (simtk.unit.Quantity compatible with 'atmospheres') - the pressure for constant-pressure systems (default: None)
 
+        mm (simtk.openmm API) - OpenMM API implementation to use
+        cache_context (boolean) - if True, will try to cache Context objects
 
         """
 
@@ -110,16 +105,21 @@ class ThermodynamicState(object):
         self.temperature = None     # the temperature
         self.pressure = None        # the pressure, or None if not isobaric
 
+        self._mm = None             # Cached OpenMM implementation
+
         self._cache_context = True  # if True, try to cache Context object
         self._context = None        # cached Context
         self._integrator = None     # cached Integrator
 
+        # Store OpenMM implementation.
+        if mm:
+            self._mm = mm
+        else:
+            self._mm = simtk.openmm
+
         # Store provided values.
         if system is not None:
-            if type(system) == str:
-                system = str_to_system(system)
-            if type(system) is not mm.System:
-                raise(TypeError("system must be an OpenMM System; instead found %s" % type(system)))
+            # TODO: Check to make sure system object implements OpenMM System API.
             self.system = copy.deepcopy(system) # TODO: Do this when deep copy works.
             # self.system = system # we make a shallow copy for now, which can cause trouble later
         if temperature is not None:
@@ -134,7 +134,7 @@ class ThermodynamicState(object):
             for force_index in range(self.system.getNumForces()):
                 force = self.system.getForce(force_index)
                 # Dispatch forces
-                if isinstance(force, mm.MonteCarloBarostat):
+                if isinstance(force, self._mm.MonteCarloBarostat):
                     barostat = force
                     break
             if barostat:
@@ -143,7 +143,7 @@ class ThermodynamicState(object):
                 barostat.setTemperature(temperature)                
             else:
                 # Create barostat.
-                barostat = mm.MonteCarloBarostat(pressure, temperature)
+                barostat = self._mm.MonteCarloBarostat(pressure, temperature)
                 self.system.addForce(barostat)                    
 
         return
@@ -168,13 +168,13 @@ class ThermodynamicState(object):
 
         # Create an integrator.
         timestep = 1.0 * units.femtosecond
-        self._integrator = mm.VerletIntegrator(timestep)        
+        self._integrator = self._mm.VerletIntegrator(timestep)        
             
         # Create a new OpenMM context.
         if platform:                
-            self._context = mm.Context(self.system, self._integrator, platform)
+            self._context = self._mm.Context(self.system, self._integrator, platform)
         else:
-            self._context = mm.Context(self.system, self._integrator)
+            self._context = self._mm.Context(self.system, self._integrator)
             
         logger.debug("_create_context created a new integrator and context")
 
@@ -195,24 +195,23 @@ class ThermodynamicState(object):
 
         return potential_energy
     
-    def reduced_potential(self, coordinates, box_vectors=None, platform=None):
-        """Compute the reduced potential for the given coordinates in this thermodynamic state.
+    def reduced_potential(self, coordinates, box_vectors=None, mm=None, platform=None):
+        """
+        Compute the reduced potential for the given coordinates in this thermodynamic state.
 
-        Parameters
-        ----------
+        ARGUMENTS
 
-        coordinates : simtk.unit.Quantity wrapped numpy ndarray, shape=(N, 3)
-            coordinates[n,k] is kth coordinate of particle n
-        box_vectors : 
-            periodic box vectors
+        coordinates (simtk.unit.Quantity of Nx3 numpy.array) - coordinates[n,k] is kth coordinate of particle n
 
-        Returns
-        -------
-        u : float
-            The unitless reduced potential (which can be considered to have units of kT)
+        OPTIONAL ARGUMENTS
         
-        Examples
-        --------
+        box_vectors - periodic box vectors
+
+        RETURNS
+
+        u (float) - the unitless reduced potential (which can be considered to have units of kT)
+        
+        EXAMPLES
 
         Compute the reduced potential of a Lennard-Jones cluster at 100 K.
         
@@ -238,8 +237,7 @@ class ThermodynamicState(object):
         >>> box_vectors = system.getDefaultPeriodicBoxVectors()
         >>> potential = state.reduced_potential(positions, box_vectors)
     
-        Notes
-        -----
+        NOTES
 
         The reduced potential is defined as in Ref. [1]
 
@@ -258,17 +256,18 @@ class ThermodynamicState(object):
         V(x) is the instantaneous box volume
         N(x) the numbers of various particle species (e.g. protons of titratible groups)
         
-        References
-        ----------
+        REFERENCES
 
         [1] Shirts MR and Chodera JD. Statistically optimal analysis of equilibrium states. J Chem Phys 129:124105, 2008.
 
         TODO
-        ----
 
         * Instead of requiring configuration and box_vectors be passed separately, develop a Configuration or Snapshot class.
         
         """
+
+        # Select OpenMM implementation if not specified.
+        if mm is None: mm = simtk.openmm
 
         # If pressure is specified, ensure box vectors have been provided.
         if (self.pressure is not None) and (box_vectors is None):
@@ -304,28 +303,24 @@ class ThermodynamicState(object):
 
         return reduced_potential
 
-    def reduced_potential_multiple(self, coordinates_list, box_vectors_list=None, platform=None):
-        """Compute the reduced potential for the given sets of coordinates in this thermodynamic state.
-        
+    def reduced_potential_multiple(self, coordinates_list, box_vectors_list=None, mm=None, platform=None):
+        """
+        Compute the reduced potential for the given sets of coordinates in this thermodynamic state.
         This can pontentially be more efficient than repeated calls to reduced_potential.
 
-        Parameters
-        ----------
+        ARGUMENTS
 
-        coordinates_list : list of simtk.unit.Quantity wrapped Nx3 numpy.arrays)
-            coordinates_list[i][n,k] is kth coordinate of particle n from list i
+        coordinates_list (list of simtk.unit.Quantity of Nx3 numpy.array) - coordinates[n,k] is kth coordinate of particle n
+
+        OPTIONAL ARGUMENTS
         
-        box_vectors :
-            periodic box vectors
+        box_vectors - periodic box vectors
 
-        Returns
-        -------
+        RETURNS
 
-        u_k : np.ndarray, shape=(K), dtype=float
-            The unitless reduced potentials (which can be considered to have units of kT)
+        u_k (K numpy array of float) - the unitless reduced potentials (which can be considered to have units of kT)
         
-        Examples
-        --------
+        EXAMPLES
 
         Compute the reduced potential of a Lennard-Jones cluster at multiple configurations at 100 K.
         
@@ -340,8 +335,7 @@ class ThermodynamicState(object):
         >>> # compute potential for all sets of coordinates
         >>> potentials = state.reduced_potential_multiple(coordinates_list)
 
-        Notes
-        -----
+        NOTES
 
         The reduced potential is defined as in Ref. [1]
 
@@ -360,17 +354,18 @@ class ThermodynamicState(object):
         V(x) is the instantaneous box volume
         N(x) the numbers of various particle species (e.g. protons of titratible groups)
         
-        References
-        ----------
+        REFERENCES
 
         [1] Shirts MR and Chodera JD. Statistically optimal analysis of equilibrium states. J Chem Phys 129:124105, 2008.
 
         TODO
-        ----
 
         * Instead of requiring configuration and box_vectors be passed separately, develop a Configuration or Snapshot class.
         
         """
+
+        # Select OpenMM implementation if not specified.
+        if mm is None: mm = simtk.openmm
 
         # If pressure is specified, ensure box vectors have been provided.
         if (self.pressure is not None) and (box_vectors_list is None):
@@ -406,22 +401,18 @@ class ThermodynamicState(object):
         return u_k
 
     def is_compatible_with(self, state):
-        """Determine whether another state is in the same thermodynamic ensemble (e.g. NVT, NPT).
+        """
+        Determine whether another state is in the same thermodynamic ensemble (e.g. NVT, NPT).
 
-        Parameters
-        ----------
+        ARGUMENTS
 
-        state : ThermodynamicState
-            thermodynamic state whose compatibility is to be determined
+        state (ThermodynamicState) - thermodynamic state whose compatibility is to be determined
 
-        Returns
-        -------
+        RETURNS
         
-        is_compatible : bool
-            True if 'state' is of the same ensemble (e.g. both NVT, both NPT), False otherwise
+        is_compatible (boolean) - True if 'state' is of the same ensemble (e.g. both NVT, both NPT), False otherwise
 
-        Examples
-        --------
+        EXAMPLES
 
         Create NVT and NPT states.
         
@@ -456,10 +447,10 @@ class ThermodynamicState(object):
         return is_compatible
 
     def __repr__(self):
-        """Returns a string representation of a state.
+        """
+        Returns a string representation of a state.
 
-        Examples
-        --------
+        EXAMPLES
 
         Create an NVT state.
         
@@ -490,16 +481,14 @@ class ThermodynamicState(object):
         return repr(r)
 
     def _volume(self, box_vectors):
-        """Return the volume of the current configuration.
+        """
+        Return the volume of the current configuration.
 
-        Returns
-        -------
+        RETURNS
 
-        volume : simtk.unit.Quantity
-            The volume of the system (in units of length^3), or None if no box coordinates are defined
+        volume (simtk.unit.Quantity) - the volume of the system (in units of length^3), or None if no box coordinates are defined
 
-        Examples
-        --------
+        EXAMPLES
         
         Compute the volume of a Lennard-Jones fluid at 100 K and 1 atm.
 
@@ -517,3 +506,12 @@ class ThermodynamicState(object):
         A = np.array([a/a.unit, b/a.unit, c/a.unit])
         volume = np.linalg.det(A) * a.unit**3
         return volume
+
+#=============================================================================================
+# MAIN AND TESTS
+#=============================================================================================
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
+
