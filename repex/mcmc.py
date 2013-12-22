@@ -197,9 +197,6 @@ class MCMCSamplerState(object):
         if not self.system:
             raise Exception("MCMCSamplerState must have a 'system' object specified to create a Context")
 
-        # DEBUG: CUDA platform segfaults during my tests.
-        platform = mm.Platform.getPlatformByName('Reference')        
-
         if platform:
             context = mm.Context(self.system, integrator, platform)
         else:
