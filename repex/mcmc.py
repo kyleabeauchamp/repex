@@ -39,7 +39,7 @@ Construct a simple MCMC simulation using Langevin dynamics moves.
 >>> # Create a sampler state.
 >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
 >>> # Create a move set.
->>> move_set = [ HMCMove(), LangevinDynamicsMove() ]
+>>> move_set = [ HMCMove(nsteps=10), LangevinDynamicsMove(nsteps=10) ]
 >>> # Create MCMC sampler
 >>> sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
 >>> # Run a number of iterations of the sampler.
@@ -118,12 +118,22 @@ class MCMCSamplerState(object):
     Examples
     --------
 
+    Create a sampler state for a system with box vectors.
+
     >>> # Create a test system
     >>> import testsystems
     >>> test = testsystems.LennardJonesFluid()
     >>> # Create a sampler state manually.
     >>> box_vectors = test.system.getDefaultPeriodicBoxVectors()
     >>> sampler_state = MCMCSamplerState(positions=test.positions, box_vectors=box_vectors, system=test.system)
+
+    Create a sampler state for a system without box vectors.
+
+    >>> # Create a test system
+    >>> import testsystems
+    >>> test = testsystems.LennardJonesCluster()
+    >>> # Create a sampler state manually.
+    >>> sampler_state = MCMCSamplerState(positions=test.positions, system=test.system)
 
     """
     def __init__(self, positions, velocities=None, box_vectors=None, system=None):
@@ -192,19 +202,82 @@ class MCMCSamplerState(object):
         -------
         context : simtk.openmm.Context
            The created OpenMM Context object
+
+        Notes
+        -----
+        If the selected or default platform fails, the CPU and Reference platforms will be tried, in that order.        
+
+        Examples
+        --------
+
+        Create a context for a system with periodic box vectors.
+        
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.LennardJonesFluid()
+        >>> # Create a sampler state manually.
+        >>> box_vectors = test.system.getDefaultPeriodicBoxVectors()
+        >>> sampler_state = MCMCSamplerState(positions=test.positions, box_vectors=box_vectors, system=test.system)
+        >>> # Create a Context.
+        >>> import simtk.openmm as mm
+        >>> import simtk.unit as u
+        >>> integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
+        >>> context = sampler_state.createContext(integrator)
+        >>> # Clean up.
+        >>> del context
+
+        Create a context for a system without periodic box vectors.
+
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.LennardJonesCluster()
+        >>> # Create a sampler state manually.
+        >>> sampler_state = MCMCSamplerState(positions=test.positions, system=test.system)
+        >>> # Create a Context.
+        >>> import simtk.openmm as mm
+        >>> import simtk.unit as u
+        >>> integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
+        >>> context = sampler_state.createContext(integrator)
+        >>> # Clean up.
+        >>> del context
+        
         """
 
         if not self.system:
             raise Exception("MCMCSamplerState must have a 'system' object specified to create a Context")
 
-        if platform:
-            context = mm.Context(self.system, integrator, platform)
-        else:
-            context = mm.Context(self.system, integrator)
-        
+        # TODO: Make this less hacky, and introduce a fallback chain based on platform speeds.
+        # TODO: Eliminate debug output
+        try:
+            if platform:
+                context = mm.Context(self.system, integrator, platform)
+            else:
+                context = mm.Context(self.system, integrator)
+        except Exception as e:
+            print "Exception occurred in creating Context: '%s'" % str(e)
+
+            try:
+                platform_name = 'CPU'
+                print "Attempting to use fallback platform '%s'..." % platform_name
+                platform = mm.Platform.getPlatformByName(platform_name)
+                context = mm.Context(self.system, integrator, platform)            
+            except Exception as e:
+                print "Exception occurred in creating Context: '%s'" % str(e)
+
+                platform_name = 'Reference'
+                print "Attempting to use fallback platform '%s'..." % platform_name
+                platform = mm.Platform.getPlatformByName(platform_name)
+                context = mm.Context(self.system, integrator, platform)            
+
         context.setPositions(self.positions)
         if self.velocities: context.setVelocities(self.velocities)
-        if self.box_vectors: context.setPeriodicBoxVectors(self.box_vectors)
+        if self.box_vectors: 
+            try:
+                # try tuple of box vectors
+                context.setPeriodicBoxVectors(self.box_vectors[0], self.box_vectors[1], self.box_vectors[2])
+            except:
+                # try numpy 3x3 matrix of box vectors
+                context.setPeriodicBoxVectors(self.box_vectors[0,:], self.box_vectors[1,:], self.box_vectors[2,:])
 
         return context
 
@@ -239,6 +312,7 @@ class MCMCMove(object):
         updated_sampler_state : MCMCSamplerState
            The updated sampler state
 
+
         """
         pass
 
@@ -260,7 +334,7 @@ class MCMCSampler(object):
     >>> # Create a sampler state.
     >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
     >>> # Create a move set specifying probabilities fo each type of move.
-    >>> move_set = { HMCMove() : 0.5, LangevinDynamicsMove() : 0.5 }
+    >>> move_set = { HMCMove(nsteps=10) : 0.5, LangevinDynamicsMove(nsteps=10) : 0.5 }
     >>> # Create MCMC sampler
     >>> sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
     >>> # Run a number of iterations of the sampler.
@@ -282,6 +356,31 @@ class MCMCSampler(object):
             if dict, will use specified unnormalized weights (e.g. { move1 : 0.3, move2 : 0.5, move3, 0.9 })
         platform : simtk.openmm.Platform, optional, default = None
             If specified, the Platform to use for simulations.
+
+        Examples
+        --------
+
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.AlanineDipeptideVacuum()
+        >>> # Create a thermodynamic state.
+        >>> import simtk.unit as u
+        >>> from thermodynamics import ThermodynamicState
+        >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+
+        Create a move set specifying probabilities for each type of move.
+
+        >>> move_set = { HMCMove() : 0.5, LangevinDynamicsMove() : 0.5 }
+        >>> # Create MCMC sampler
+        >>> sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
+
+        Create a move set specifying an order of moves.
+
+        >>> move_set = [ HMCMove(), LangevinDynamicsMove(), HMCMove() ]
+        >>> # Create MCMC sampler
+        >>> sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
 
         """
 
@@ -308,6 +407,25 @@ class MCMCSampler(object):
         niterations : int
             Number of iterations of the sampler to run.
         
+        Examples
+        --------
+
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.AlanineDipeptideVacuum()
+        >>> # Create a thermodynamic state.
+        >>> import simtk.unit as u
+        >>> from thermodynamics import ThermodynamicState
+        >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> # Create a move set specifying probabilities fo each type of move.
+        >>> move_set = { HMCMove(nsteps=10) : 0.5, LangevinDynamicsMove(nsteps=10) : 0.5 }
+        >>> # Create MCMC sampler
+        >>> sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
+        >>> # Run a number of iterations of the sampler.
+        >>> updated_sampler_state = sampler.run(sampler_state, 10)
+
         """
 
         # Make a deep copy of the sampler state so that initial state is unchanged.
@@ -366,7 +484,7 @@ class LangevinDynamicsMove(MCMCMove):
     >>> from thermodynamics import ThermodynamicState
     >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
     >>> # Create a LangevinDynamicsMove
-    >>> move = LangevinDynamicsMove()
+    >>> move = LangevinDynamicsMove(nsteps=10)
     >>> # Perform one update of the sampler state.
     >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
 
@@ -389,6 +507,17 @@ class LangevinDynamicsMove(MCMCMove):
         ----
         The temperature of the thermodynamic state is used in Langevin dynamics.
 
+        Examples
+        --------
+        
+        Create a Langevin move with default parameters.
+
+        >>> move = LangevinDynamicsMove()
+
+        Create a Langevin move with specified parameters.
+
+        >>> move = LangevinDynamicsMove(timestep=0.5*u.femtoseconds, collision_rate=20.0/u.picoseconds, nsteps=100)
+
         """
 
         self.timestep = timestep
@@ -400,7 +529,7 @@ class LangevinDynamicsMove(MCMCMove):
 
     def apply(self, thermodynamic_state, sampler_state, platform=None):
         """
-        Apply the MCMC move.
+        Apply the Langevin dynamics MCMC move.
 
         Parameters
         ----------
@@ -415,6 +544,22 @@ class LangevinDynamicsMove(MCMCMove):
         -------
         updated_sampler_state : MCMCSamplerState
            The updated sampler state
+
+        Examples
+        --------
+        
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.AlanineDipeptideVacuum()
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> # Create a thermodynamic state.
+        >>> from thermodynamics import ThermodynamicState
+        >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+        >>> # Create a LangevinDynamicsMove
+        >>> move = LangevinDynamicsMove(nsteps=10, timestep=0.5*u.femtoseconds, collision_rate=20.0/u.picoseconds)
+        >>> # Perform one update of the sampler state.
+        >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
 
         """
         
@@ -462,7 +607,7 @@ class HMCMove(MCMCMove):
     >>> from thermodynamics import ThermodynamicState
     >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
     >>> # Create an HMC move.
-    >>> move = HMCMove()
+    >>> move = HMCMove(nsteps=10)
     >>> # Perform one update of the sampler state.
     >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
 
@@ -476,6 +621,17 @@ class HMCMove(MCMCMove):
            The timestep to use for HMC dynamics (which uses velocity Verlet following velocity randomization)
         nsteps : int, optional, default = 1000
            The number of dynamics steps to take before Metropolis acceptance/rejection.
+
+        Examples
+        --------
+
+        Create an HMC move with default timestep and number of steps.
+
+        >>> move = HMCMove()
+
+        Create an HMC move with specified timestep and number of steps.
+
+        >>> move = HMCMove(timestep=0.5*u.femtoseconds, nsteps=500)
 
         """
 
@@ -502,6 +658,23 @@ class HMCMove(MCMCMove):
         -------
         updated_sampler_state : MCMCSamplerState
            The updated sampler state
+
+        Examples
+        --------
+        
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.AlanineDipeptideVacuum()
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> # Create a thermodynamic state.
+        >>> from thermodynamics import ThermodynamicState
+        >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+        >>> # Create an HMC move.
+        >>> move = HMCMove(nsteps=10, timestep=0.5*u.femtoseconds)
+        >>> # Perform one update of the sampler state.
+        >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
+
         """
         
         # Create integrator.
@@ -529,4 +702,4 @@ class HMCMove(MCMCMove):
 
 if __name__ == "__main__":
     import doctest
-    doctest.testmod()
+    doctest.testmod(verbose=True)
