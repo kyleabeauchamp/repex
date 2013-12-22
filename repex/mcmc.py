@@ -31,19 +31,19 @@ Construct a simple MCMC simulation using Langevin dynamics moves.
 
 >>> # Create a test system
 >>> import testsystems
->>> [system, coordinates] = testsystems.AlanineDipeptideImplicit()
->>> # Create a move set containing just a molecular dynamics move.
->>> move_set = set() # set of moves to choose from
->>> move = LangevinDynamicsMove(system)
->>> move.weight = 1.0 # relative weight of move
->>> move.collision_rate = 5.0 / unit.picosecond # set collision rate
->>> move.timestep = 2.0 * units.femtoseconds # set the timestep
->>> move.nsteps = 500 # set the number of steps per move
->>> move_set.insert(move) # add move to move set
+>>> test = testsystems.AlanineDipeptideVacuum()
+>>> # Create a thermodynamic state.
+>>> import simtk.unit as u
+>>> from thermodynamics import ThermodynamicState
+>>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+>>> # Create a sampler state.
+>>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+>>> # Create a move set.
+>>> move_set = [ HMCMove(), LangevinDynamicsMove() ]
 >>> # Create MCMC sampler
->>> sampler = MCMCSampler(system, move_set)
->>> niterations = 10 # set number of iterations to run
->>> sampler.run(niterations)
+>>> sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
+>>> # Run a number of iterations of the sampler.
+>>> updated_sampler_state = sampler.run(sampler_state, 10)
 
 TODO
 
@@ -84,30 +84,16 @@ import copy
 import time
 
 import simtk
-import simtk.chem.openmm as openmm
-import simtk.unit as units
+import simtk.openmm as mm
+import simtk.unit as u
 
 from repex import integrators
+
+from abc import abstractmethod 
 
 #=============================================================================================
 # MODULE CONSTANTS
 #=============================================================================================
-
-#=============================================================================================
-# Exceptions
-#=============================================================================================
-
-class NotImplementedException(Exception):
-    """
-    Exception denoting that the requested feature has not yet been implemented.
-
-    """
-
-class ParameterException(Exception):
-    """
-    Exception denoting that a parameter has been incorrectly furnished.
-
-    """
 
 #=============================================================================================
 # MCMC sampler state
@@ -134,10 +120,10 @@ class MCMCSamplerState(object):
 
     >>> # Create a test system
     >>> import testsystems
-    >>> [system, positions] = testsystems.AlanineDipeptideVacuum()
+    >>> test = testsystems.LennardJonesFluid()
     >>> # Create a sampler state manually.
-    >>> box_vectors = system.getDefaultPeriodicBoxVectors()
-    >>> sampler_state = MCMCSamplerState(positions, box_vectors, system)
+    >>> box_vectors = test.system.getDefaultPeriodicBoxVectors()
+    >>> sampler_state = MCMCSamplerState(positions=test.positions, box_vectors=box_vectors, system=test.system)
 
     """
     def __init__(self, positions, velocities=None, box_vectors=None, system=None):
@@ -147,7 +133,7 @@ class MCMCSamplerState(object):
         self.system = system
 
     @classmethod
-    def createFromContext(context):
+    def createFromContext(cls, context):
         """
         Create an MCMCSamplerState object from the information in a current OpenMM Context object.
         
@@ -166,14 +152,15 @@ class MCMCSamplerState(object):
 
         >>> # Create a test system
         >>> import testsystems
-        >>> [system, positions] = testsystems.AlanineDipeptideVacuum()
+        >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a Context.
         >>> import simtk.openmm as mm
         >>> import simtk.unit as u
         >>> integrator = mm.VerletIntegrator(1.0 * u.femtoseconds)
-        >>> context = mm.Context(system, integrator)
+        >>> platform = mm.Platform.getPlatformByName('Reference')
+        >>> context = mm.Context(test.system, integrator, platform)
         >>> # Set positions and velocities.
-        >>> context.setPositions(positions)
+        >>> context.setPositions(test.positions)
         >>> context.setVelocitiesToTemperature(298 * u.kelvin)
         >>> # Create a sampler state from the Context.
         >>> sampler_state = MCMCSamplerState.createFromContext(context)
@@ -190,7 +177,7 @@ class MCMCSamplerState(object):
 
         return SamplerState(positions, velocities, box_vectors, system)
 
-    def createContext(integrator, platform=None):
+    def createContext(self, integrator, platform=None):
         """
         Create an OpenMM Context object from the current sampler state.
 
@@ -210,6 +197,9 @@ class MCMCSamplerState(object):
         if not self.system:
             raise Exception("MCMCSamplerState must have a 'system' object specified to create a Context")
 
+        # DEBUG: CUDA platform segfaults during my tests.
+        platform = mm.Platform.getPlatformByName('CPU')        
+
         if platform:
             context = mm.Context(self.system, integrator, platform)
         else:
@@ -217,7 +207,7 @@ class MCMCSamplerState(object):
         
         context.setPositions(self.positions)
         if self.velocities: context.setVelocities(self.velocities)
-        if self.box_vectors: context.setPeriodic BoxVectors(self.box_vectors)
+        if self.box_vectors: context.setPeriodicBoxVectors(self.box_vectors)
 
 #=============================================================================================
 # Monte Carlo Move abstract base class
@@ -232,7 +222,7 @@ class MCMCMove(object):
     """
 
     @abstractmethod
-    def apply(self, thermodynamic_state, sampler_state):
+    def apply(self, thermodynamic_state, sampler_state, platform=None):
         """
         Apply the MCMC move.
 
@@ -242,11 +232,14 @@ class MCMCMove(object):
            The thermodynamic state to use when applying the MCMC move
         sampler_state : MCMCSamplerState
            The sampler state to apply the move to
+        platform : simtk.openmm.Platform, optional, default = None
+           The platform to use.
 
         Returns
         -------
         updated_sampler_state : MCMCSamplerState
            The updated sampler state
+
         """
         pass
 
@@ -258,9 +251,25 @@ class MCMCSampler(object):
     """
     Markov chain Monte Carlo sampler.
 
+    >>> # Create a test system
+    >>> import testsystems
+    >>> test = testsystems.AlanineDipeptideVacuum()
+    >>> # Create a thermodynamic state.
+    >>> import simtk.unit as u
+    >>> from thermodynamics import ThermodynamicState
+    >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+    >>> # Create a sampler state.
+    >>> sampler_state = MCMCSamplerState(system=system, positions=test.positions)
+    >>> # Create a move set specifying probabilities fo each type of move.
+    >>> move_set = { HMCMove() : 0.5, LangevinDynamicsMove() : 0.5 }
+    >>> # Create MCMC sampler
+    >>> sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
+    >>> # Run a number of iterations of the sampler.
+    >>> updated_sampler_state = sampler.run(sampler_state, 10)
+    
     """
 
-    def __init__(self, thermodynamic_state, move_set=None):
+    def __init__(self, thermodynamic_state, move_set=None, platform=None):
         """
         Initialize a Markov chain Monte Carlo sampler.
 
@@ -272,6 +281,8 @@ class MCMCSampler(object):
             Moves to attempt during MCMC run.
             If list or tuple, will run all moves each iteration in specified sequence. (e.g. [move1, move2, move3])
             if dict, will use specified unnormalized weights (e.g. { move1 : 0.3, move2 : 0.5, move3, 0.9 })
+        platform : simtk.openmm.Platform, optional, default = None
+            If specified, the Platform to use for simulations.
 
         """
 
@@ -283,17 +294,16 @@ class MCMCSampler(object):
             raise Exception("move_set must be list or dict")
         # TODO: Make deep copy of the move set?
         self.move_set = move_set
-        
+        self.platform = platform
+
         return
 
-    def run(self, thermodynamic_state, sampler_state, niterations):
+    def run(self, sampler_state, niterations):
         """
         Run the sampler for a specified number of iterations.
 
         Parameters
         ----------
-        thermodynamic_state : ThermodynamicState
-            The thermodynamic state specifying the System, temperature, pressure (if applicable), etc.
         sampler_state : SamplerState
             The current state of the sampler.
         niterations : int
@@ -320,7 +330,7 @@ class MCMCSampler(object):
         
         # Apply move sequence.
         for move in move_sequence:
-            move.apply(thermodynamic_state, sampler_state)
+            move.apply(self.thermodynamic_state, sampler_state, platform=self.platform)
                 
         # Return the updated sampler state.
         return sampler_state
@@ -344,6 +354,22 @@ class LangevinDynamicsMove(MCMCMove):
     No Metropolization is used to ensure the correct phase space distribution is sampled.
     This means that timestep-dependent errors will remain uncorrected, and are amplified with larger timesteps.
     Use this move at your own risk!
+
+    Examples
+    --------
+
+    >>> # Create a test system
+    >>> import testsystems
+    >>> test = testsystems.AlanineDipeptideVacuum()
+    >>> # Create a sampler state.
+    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+    >>> # Create a thermodynamic state.
+    >>> from thermodynamics import ThermodynamicState
+    >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+    >>> # Create a LangevinDynamicsMove
+    >>> move = LangevinDynamicsMove()
+    >>> # Perform one update of the sampler state.
+    >>> updated_sampler_state = move.update(thermodynamic_state, sampler_state)
 
     """
 
@@ -373,28 +399,31 @@ class LangevinDynamicsMove(MCMCMove):
 
         return
 
-    def apply(self, thermodynamic_state, sampler_state):
-        """Update the sampler state using Langevin dynamics.
-        
+    def apply(self, thermodynamic_state, sampler_state, platform=None):
+        """
+        Apply the MCMC move.
+
         Parameters
         ----------
         thermodynamic_state : ThermodynamicState
-            The thermodynamic state specifying the System, temperature, pressure (if applicable), etc.
-        sampler_state : SamplerState
-            The current state of the sampler.
-            
+           The thermodynamic state to use when applying the MCMC move
+        sampler_state : MCMCSamplerState
+           The sampler state to apply the move to
+        platform : simtk.openmm.Platform, optional, default = None
+           If not None, the specified platform will be used.
+
         Returns
         -------
-            
-        updated_sampler_state : SamplerState
-            The updated state of the sampler.
+        updated_sampler_state : MCMCSamplerState
+           The updated sampler state
+
         """
         
         # Create integrator.
         integrator = openmm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)
 
         # Create context.
-        context = sampler_state.createContext(integrator)
+        context = sampler_state.createContext(integrator, platform=platform)
 
         if self.reassign_velocities:
             # Assign Maxwell-Boltzmann velocities.        
@@ -422,318 +451,78 @@ class HMCMove(MCMCMove):
     This move assigns a velocity from the Maxwell-Boltzmann distribution and executes a number
     of velocity Verlet steps to propagate dynamics.  
 
+    Examples
+    --------
+
+    >>> # Create a test system
+    >>> import testsystems
+    >>> test = testsystems.AlanineDipeptideVacuum()
+    >>> # Create a sampler state.
+    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+    >>> # Create a thermodynamic state.
+    >>> from thermodynamics import ThermodynamicState
+    >>> thermodynamic_state = ThermodynamicState(system=system, temperature=298*u.kelvin)
+    >>> # Create an HMC move.
+    >>> move = HMCMove()
+    >>> # Perform one update of the sampler state.
+    >>> updated_sampler_state = move.update(thermodynamic_state, sampler_state)
+
     """
 
     def __init__(self, timestep=1.0*simtk.unit.femtosecond, nsteps=1000):
         """
+        Parameters
+        ----------
+        timestep : simtk.unit.Quantity compatible with femtoseconds, optional, default = 1*femtosecond
+           The timestep to use for HMC dynamics (which uses velocity Verlet following velocity randomization)
+        nsteps : int, optional, default = 1000
+           The number of dynamics steps to take before Metropolis acceptance/rejection.
 
         """
 
         # Set defaults
-        self.temperature = temperature
-        self.timestep = 1.0 * units.femtosecond
+        self.timestep = 1.0 * u.femtosecond
         self.nsteps = nsteps
 
         return
 
-    def run(self, state, positions):
+    def apply(self, thermodynamic_state, sampler_state, platform=None):
         """
-        Apply move to the specified system and coordinates.
+        Apply the MCMC move.
 
-        ARGUMENTS
+        Parameters
+        ----------
+        thermodynamic_state : ThermodynamicState
+           The thermodynamic state to use when applying the MCMC move
+        sampler_state : MCMCSamplerState
+           The sampler state to apply the move to
+        platform : simtk.openmm.Platform, optional, default = None
+           If not None, the specified platform will be used.
 
-        state (ThermodynamicState) - thermodynamic state
-        positions (Quantity of numpy array) - current positions
-        
-        RETURNS
-
-        new_positions
-
+        Returns
+        -------
+        updated_sampler_state : MCMCSamplerState
+           The updated sampler state
         """
         
         # Create integrator.
-        integrator = integrators.HybridMonteCarloIntegrator(self.temperature, self.timestep, self.nsteps)
+        integrator = integrators.HMCIntegrator(temperature=thermodynamic_state.temperature, timestep=self.timestep, nsteps=self.nsteps)
 
         # Create context.
-        context = openmm.Context(state.system, integrator)
-        
-        # Set coordinates.
-        context.setPositions(positions)
+        context = sampler_state.createContext(integrator, platform=platform)
 
         # Run dynamics.
+        # Note that ONE step of this integrator is equal to self.nsteps of velocity Verlet dynamics followed by Metropolis accept/reject.
         integrator.step(1)
         
-        # Get coordinates.
-        openmm_state = context.getState(getPositions=True)
-        new_positions = openmm_state.getPositions(asNumpy=True)
+        # Get sampler state.
+        updated_sampler_state = MCMCSamplerState.createFromContext(context)
 
         # Clean up.
-        del context, integrator, openmm_state
+        del context
 
-        return new_positions
-
-#=============================================================================================
-# Monte Carlo volume move for constant-pressure simulation
-#=============================================================================================
-
-class MonteCarloVolumeMove(MCMCMove):
-    """
-    Monte Carlo volume move for constant-pressure simulation.
-
-    NOTES
-
-    Gaussian displacements in volume are attempted, and the box geometry scaled isotropically.
-    Because the Gaussian tails extend into a region where the box volume could be negative, this region is excluded from draws
-    and Metropolis-Hastings is used to ensure proper satisfaction of detailed balace.
-
-    If the old volume is Vold and the new volume Vnew, with DeltaV = (Vnew - Vold) the Gaussian random variate with std dev sigma,
-    the Metropolis-Hastings acceptance probability can be shown to be
-
-    P_accept = [P(Vnew)/P(Vold)] [P(Vold | Vnew)/P(Vnew | Vold)]
-
-    where
-
-    P(Vnew)/P(Vold) = exp[- beta (U(Vnew) - U(Vold) + p DeltaV ]
-
-    and
-
-    P(Vold | Vnew)/P(Vnew | Vold) = (Vnew/Vold)^N [1 + erf(Vnew/sigma/sqrt(2))] / [1 + erf(Vold/sigma/sqrt(2))]                                              
-
-    Molecular scaling is used to scale the molecular centers of mass when the box is rescaled.
-
-    During pre-equilibration, the Gaussian displacement standard deviation mcvolume_sigma is adjusted heuristically
-    to obtain an acceptance probability of ~ 50% if the 'mcvolume_adjust_sigma' flag is set to .TRUE.
-    This option MUST be switched off during equilibration and production or else detailed balance will be violated.
-
-    This method must be combined with a canonical (NVT) sampling method to produce the isothermal-isobaric (NPT) ensemble.
-
-    REFERENCES
-
-    TODO:
-
-    Introduce 'tune' function?
-
-    """
-
-    def __init__(self, reference_system):
-        """
-        Initialize Monte Carlo volume move scheme.
-
-        """
-
-        # Set default options.
-        self.proposal_method = 'gaussian' # volume change proposal method 'gaussian' or 'uniform'
-        self.sigma = 0.001 * self._volume(reference_system) # volume change proposal magnitude
-        self.ntrials = 10 # number of volume move attempts per iteration
-        self.method = 'atomic-scaling' # method for volume move: 'atomic-scaling' is supported now, 'molecular scaling' later
-
-        self.adjust_move_size = False # whether move size should be adjusted or not
-        self.adjust_interval = 1 # interval between move size adjustments, in cycles
-        self.target_acceptance = 0.5 # target value for acceptance rate for adjusting moves
-        self.sigma_inflation_factor = 1.50 # factor for scaling move size up
-        self.sigma_deflation_factor = 0.95 # factor for scaling move size down
-
-        # Build a list of molecules, in case we use molecular scaling.
-        self.molecules = reference_system.enumerateMolecules()
-
-        # Reset statistics.
-        self.nattempted = 0 # number of moves attempted since last update
-        self.naccepted = 0 # number of moves accepted since last move size adjustment adjustment
-            
-        return
-
-    def _volume(box_vectors):
-        """
-        Compute the volume of the given box vectors.
-
-        ARGUMENTS
-
-        box_vectors - a list of numpy 3-vectors with units
-
-        RETURNS
-
-        volume (Quantity) - the box volume, in units of length**3
-
-        """
-        
-        # Compute volume of parallelepiped.
-        import numpy.linalg
-        [a,b,c] = self.box_vectors
-        A = numpy.array([a/a.unit, b/a.unit, c/a.unit])
-        volume = numpy.abs(A) * a.unit**3
-        return volume        
-
-    def run(self, state, positions):
-        """
-        Apply move to the specified system and coordinates.
-
-        ARGUMENTS
-
-        state (ThermodynamicState) - thermodynamic state
-        positions (Quantity of numpy array) - current positions
-        
-        RETURNS
-
-        new_positions
-
-        """
-
-        # Compute reduced potential for initial coordinates.
-        old_reduced_potential = state.reduced_potential(positions)
-        old_volume = self._volume(state.system.getPeriodicBoxVectors)
-        
-        for attempt in range(self.nattempts):
-            if verbose: print "MC volume attempt %d / %d" % (attempt, self.nattempts)
-
-            # Choose volume perturbation.
-            DeltaV = 0.0
-            if self.volume_move_method == 'gaussian':
-                DeltaV = numpy.random.randn() * self.volume_move_size
-            elif self.volume_move_method == 'uniform':
-                DeltaV = (2.0 * numpy.random.rand() - 1.0) * self.volume_move_size
-            else:
-                raise Exception("Unknown volume move method '%s'." % self.volume_move_method)
-
-            # Compute new box volume.
-            volume = old_volume + DeltaV # new box volume
-            
-            # Determine scaling factor for box vectors and atomic or molecular positions.
-            scale_factor = ((volume + DeltaV) / volume)**(1.0/3.0)
-
-            # Scale box.
-            [a,b,c] = state.system.getPeriodicBoxVectors()
-            state.system.setPeriodicBoxVectors(a * scale_factor, b * scale_factor, c * scale_factor)
-
-            # Scale atomic positions.
-            if self.scaling_method = 'atomic':
-                positions = old_positions * scale_factor
-                nscale = state.system.natoms # number of atoms
-            elif self.scaling_method = 'molecular':
-                for molecule in state.system.iterateMolecules():
-                    com = old_positions[molecule.atom_indices].mean() # center of mass position
-                    translation = com * (scale_factor - 1.0) # translation shift to apply to all molecular coordinates
-                    positions[molecule.atom_indices] = old_positions[molecule.atom_indices] + translation
-                nscale = state.system.nmolecules # number of molecules, used in proposal probability
-
-            # Compute log proposal probability
-            log_proposal_ratio = float(nscale) * math.log(volume / old_volume)
-
-            # Evaluate energy change.
-            reduced_potential = state.reduced_potential(positions)
-
-            # Compute log probability change.
-            Delta_logP = - (reduced_potential - old_reduced_potential) + log_proposal_ratio
-
-            # Accept or reject.
-            nattempted += 1
-            if (Delta_logP >= 0.0) or (numpy.random.rand() < math.exp(Delta_logP)):
-                # Accept.
-                naccepted += 1
-
-                # Update energy
-                reduced_potential_old = reduced_potential
-
-                if self.verbose: print "rejected"
-            else:
-                # Reject.
-
-                # Restore box vectors.
-                state.system.setPeriodicBoxVectors(a, b, c)
-
-                # Restore positions.
-                for iatom in range(state.system.getNumParticles()):
-                    positions[i] = old_positions[i]
-
-                if self.verbose: print "accepted"
-
-        return new_positions
-
-#=============================================================================================
-# Constant pH
-#=============================================================================================
-
-class ProtonationStateMove(MCMCMove):
-    """
-    Protonation state move for constant-pH simulation.
-
-    This move type implements the constant-pH dynamics of Mongan and Case [1].
-
-    REFERENCES
-
-    [1] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born
-    implicit solvent. J Comput Chem 25:2038, 2004.
-
-    TODO
-
-    * Should we generalize this to multiple tautomers too?
-    * Should we have separate classes for protein constant pH an ligand pH/tautomer?
-    
-
-    """
-
-    def __init__(self, reference_system, metadata, titratable_groups):
-        """
-        Initialize a constant-pH move.
-
-        ARGUMENTS
-
-        reference_system
-        metadata - information about atom names, residues, and connectivity
-        titratable_groups - dictionary of titratable groups, their charges, and reference pKas
-        
-        """
-
-        # Set defaults.
-        self.nattempts = 10 # number of protonation state change attempts per call
-        self.double_proposal_probability = 0.1 # probability of proposing two simultaneous protonation state changes
-        
-        return
-
-    def select_protonation_state(self, titratable_group_index, titration_state_index, state):
-        """
-        Change the titration state of the designated group for the provided state.
-
-        """
-
-        # Here, we modify the charges for the atoms in state.system that correspond to the designated titratable_group.
-
-        atom_indices
-        new_charges
-
-        for index in atom_indices:
-            state.system.charges[index] = new_charges[index]
-
-        # Add a @property decorator to System that allows us to index the charges on all atoms in the system?
-        # This would have to appropriately modify both NonbondedForce and OBCGBSAForce force entries, as well as special exclusions which depend on whether system is being decoupled or annihilated.
-        # Would it be easier to regenerate from modified AMBER prmtop data representation at this point?  The problem is that this strategy would not work with other forcefields.    
-            
-        return
-
-    def run(self, state, positions):
-        """
-        Apply move to the specified system and coordinates.
-
-        ARGUMENTS
-
-        state (ThermodynamicState) - thermodynamic state
-        positions (Quantity of numpy array) - current positions
-        
-        RETURNS
-
-        new_positions
-
-        """
-
-        # Make several attempts to change protonation state.
-        for attempt in range(self.nattempts):
-            
-        # Each attempt requires we change the *charges* in the system    
-        # Use state.reduced_potential() to compute the reduced potential after a modification attempt.        
-
-        return new_positions
-
-    # Also provide utility methods to help compute reference free energies and protonated/deprotonated charges for new molecules.
-    # Would provide OEMol entries for each protonation state with AM1-BCC charges and known pKas or tautomer ratios, and we would compute free energies of each state.
+        # Return updated sampler state.
+        return updated_sampler_state
     
 #=============================================================================================
 # MAIN AND TESTS
