@@ -175,7 +175,7 @@ class MCMCSamplerState(object):
         box_vectors = openmm_state.getPeriodicBoxVectors(asNumpy=True)
         system = context.getSystem()
 
-        return SamplerState(positions, velocities, box_vectors, system)
+        return MCMCSamplerState(positions=positions, velocities=velocities, box_vectors=box_vectors, system=system)
 
     def createContext(self, integrator, platform=None):
         """
@@ -198,7 +198,7 @@ class MCMCSamplerState(object):
             raise Exception("MCMCSamplerState must have a 'system' object specified to create a Context")
 
         # DEBUG: CUDA platform segfaults during my tests.
-        platform = mm.Platform.getPlatformByName('CPU')        
+        platform = mm.Platform.getPlatformByName('Reference')        
 
         if platform:
             context = mm.Context(self.system, integrator, platform)
@@ -208,6 +208,8 @@ class MCMCSamplerState(object):
         context.setPositions(self.positions)
         if self.velocities: context.setVelocities(self.velocities)
         if self.box_vectors: context.setPeriodicBoxVectors(self.box_vectors)
+
+        return context
 
 #=============================================================================================
 # Monte Carlo Move abstract base class
@@ -259,7 +261,7 @@ class MCMCSampler(object):
     >>> from thermodynamics import ThermodynamicState
     >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
     >>> # Create a sampler state.
-    >>> sampler_state = MCMCSamplerState(system=system, positions=test.positions)
+    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
     >>> # Create a move set specifying probabilities fo each type of move.
     >>> move_set = { HMCMove() : 0.5, LangevinDynamicsMove() : 0.5 }
     >>> # Create MCMC sampler
@@ -369,7 +371,7 @@ class LangevinDynamicsMove(MCMCMove):
     >>> # Create a LangevinDynamicsMove
     >>> move = LangevinDynamicsMove()
     >>> # Perform one update of the sampler state.
-    >>> updated_sampler_state = move.update(thermodynamic_state, sampler_state)
+    >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
 
     """
 
@@ -420,17 +422,17 @@ class LangevinDynamicsMove(MCMCMove):
         """
         
         # Create integrator.
-        integrator = openmm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)
+        integrator = mm.LangevinIntegrator(thermodynamic_state.temperature, self.collision_rate, self.timestep)
 
         # Create context.
         context = sampler_state.createContext(integrator, platform=platform)
 
         if self.reassign_velocities:
             # Assign Maxwell-Boltzmann velocities.        
-            context.setVelocitiesToTemperature(state.temperature)
+            context.setVelocitiesToTemperature(thermodynamic_state.temperature)
         
         # Run dynamics.
-        integrator.step(self.number_of_steps_per_iteration)
+        integrator.step(self.nsteps)
         
         # Get updated sampler state.
         updated_sampler_state = MCMCSamplerState.createFromContext(context)
@@ -461,11 +463,11 @@ class HMCMove(MCMCMove):
     >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
     >>> # Create a thermodynamic state.
     >>> from thermodynamics import ThermodynamicState
-    >>> thermodynamic_state = ThermodynamicState(system=system, temperature=298*u.kelvin)
+    >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
     >>> # Create an HMC move.
     >>> move = HMCMove()
     >>> # Perform one update of the sampler state.
-    >>> updated_sampler_state = move.update(thermodynamic_state, sampler_state)
+    >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
 
     """
 
