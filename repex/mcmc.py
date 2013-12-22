@@ -585,6 +585,205 @@ class LangevinDynamicsMove(MCMCMove):
         return updated_sampler_state
     
 #=============================================================================================
+# Genaralized Hybrid Monte Carlo (GHMC, a form of Metropolized Langevin dynamics) move
+#=============================================================================================
+
+class GHMCMove(MCMCMove):
+    """
+    Generalized hybrid Monte Carlo (GHMC) Markov chain Monte Carlo move
+
+    This move uses generalized Hybrid Monte Carlo (GHMC), a form of Metropolized Langevin
+    dynamics, to propagate the system.
+
+    References
+    ----------
+    Lelievre T, Stoltz G, and Rousset M. Free Energy Computations: A Mathematical Perspective
+    http://www.amazon.com/Free-Energy-Computations-Mathematical-Perspective/dp/1848162472
+
+    Examples
+    --------
+
+    >>> # Create a test system
+    >>> import testsystems
+    >>> test = testsystems.AlanineDipeptideVacuum()
+    >>> # Create a sampler state.
+    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+    >>> # Create a thermodynamic state.
+    >>> from thermodynamics import ThermodynamicState
+    >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+    >>> # Create a GHMC move
+    >>> move = GHMCMove(nsteps=10)
+    >>> # Perform one update of the sampler state.
+    >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
+
+    """
+
+    def __init__(self, timestep=1.0*simtk.unit.femtosecond, collision_rate=10.0/simtk.unit.picoseconds, nsteps=1000):
+        """
+        Parameters
+        ----------
+        timestep : simtk.unit.Quantity compatible with femtoseconds, optional, default = 1*simtk.unit.femtoseconds
+            The timestep to use for Langevin integration.
+        collision_rate : simtk.unit.Quantity compatible with 1/picoseconds, optional, default = 10/simtk.unit.picoseconds
+            The collision rate with fictitious bath particles.
+        nsteps : int, optional, default = 1000 
+            The number of integration timesteps to take each time the move is applied.
+
+        Note
+        ----
+        The temperature of the thermodynamic state is used.
+
+        Examples
+        --------
+        
+        Create a GHMC move with default parameters.
+
+        >>> move = GHMCMove()
+
+        Create a GHMC move with specified parameters.
+
+        >>> move = GHMCMove(timestep=0.5*u.femtoseconds, collision_rate=20.0/u.picoseconds, nsteps=100)
+
+        """
+
+        # User parameters.
+        self.timestep = timestep
+        self.collision_rate = collision_rate
+        self.nsteps = nsteps
+
+        self.reset_statistics()
+
+        return
+
+    def reset_statistics(self):
+        """
+        Reset the internal statistics of number of accepted and attempted moves.
+
+        Examples
+        --------
+        
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.AlanineDipeptideVacuum()
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> # Create a thermodynamic state.
+        >>> from thermodynamics import ThermodynamicState
+        >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+        >>> # Create a LangevinDynamicsMove
+        >>> move = GHMCMove(nsteps=10, timestep=1.0*u.femtoseconds, collision_rate=20.0/u.picoseconds)
+        >>> # Perform one update of the sampler state.
+        >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
+
+        Reset statistics.
+        
+        >>> move.reset_statistics()
+
+        """
+
+        self.naccepted = 0 # number of accepted steps
+        self.nattempted = 0 # number of attempted steps
+
+        return
+    
+    def get_statistics(self):
+        """
+        Return the current acceptance/rejection statistics of the sampler.
+
+        Returns
+        -------
+        naccepted : int
+           The number of accepted steps
+        nattempted : int
+           The number of attempted steps
+        faction_accepted : float
+           The fraction of steps accepted.
+
+        Examples
+        --------
+        
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.AlanineDipeptideVacuum()
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> # Create a thermodynamic state.
+        >>> from thermodynamics import ThermodynamicState
+        >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+        >>> # Create a LangevinDynamicsMove
+        >>> move = GHMCMove(nsteps=10, timestep=1.0*u.femtoseconds, collision_rate=20.0/u.picoseconds)
+        >>> # Perform one update of the sampler state.
+        >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
+
+        Get statistics.
+        
+        >>> [naccepted, nattempted, fraction_accepted] = move.get_statistics()
+
+        """
+        return (self.naccepted, self.nattempted, float(self.naccepted) / float(self.nattempted))
+        
+
+    def apply(self, thermodynamic_state, sampler_state, platform=None):
+        """
+        Apply the GHMC MCMC move.
+
+        Parameters
+        ----------
+        thermodynamic_state : ThermodynamicState
+           The thermodynamic state to use when applying the MCMC move
+        sampler_state : MCMCSamplerState
+           The sampler state to apply the move to
+        platform : simtk.openmm.Platform, optional, default = None
+           If not None, the specified platform will be used.
+
+        Returns
+        -------
+        updated_sampler_state : MCMCSamplerState
+           The updated sampler state
+
+        Examples
+        --------
+        
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.AlanineDipeptideVacuum()
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> # Create a thermodynamic state.
+        >>> from thermodynamics import ThermodynamicState
+        >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+        >>> # Create a LangevinDynamicsMove
+        >>> move = GHMCMove(nsteps=10, timestep=1.0*u.femtoseconds, collision_rate=20.0/u.picoseconds)
+        >>> # Perform one update of the sampler state.
+        >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
+
+        """
+        
+        # Create integrator.
+        integrator = integrators.GHMCIntegrator(temperature=thermodynamic_state.temperature, collision_rate=self.collision_rate, timestep=self.timestep)
+
+        # Create context.
+        context = sampler_state.createContext(integrator, platform=platform)
+
+        # Run dynamics.
+        integrator.step(self.nsteps)
+        
+        # Get updated sampler state.
+        updated_sampler_state = MCMCSamplerState.createFromContext(context)
+        
+        # Accumulate acceptance statistics.
+        ghmc_global_variables = { integrator.getGlobalVariableName(index) : index for index in range(integrator.getNumGlobalVariables()) }
+        naccepted = integrator.getGlobalVariable(ghmc_global_variables['naccept'])
+        nattempted = integrator.getGlobalVariable(ghmc_global_variables['ntrials'])
+        self.naccepted += naccepted
+        self.nattempted += nattempted
+
+        # Clean up.
+        del context
+
+        return updated_sampler_state
+    
+#=============================================================================================
 # Hybrid Monte Carlo move
 #=============================================================================================
 
