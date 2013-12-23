@@ -247,25 +247,25 @@ class MCMCSamplerState(object):
             raise Exception("MCMCSamplerState must have a 'system' object specified to create a Context")
 
         # TODO: Make this less hacky, and introduce a fallback chain based on platform speeds.
-        # TODO: Eliminate debug output
+        # TODO: Do something useful with debug output.
         try:
             if platform:
                 context = mm.Context(self.system, integrator, platform)
             else:
                 context = mm.Context(self.system, integrator)
         except Exception as e:
-            print "Exception occurred in creating Context: '%s'" % str(e)
+            #print "Exception occurred in creating Context: '%s'" % str(e)
 
             try:
                 platform_name = 'CPU'
-                print "Attempting to use fallback platform '%s'..." % platform_name
+                #print "Attempting to use fallback platform '%s'..." % platform_name
                 platform = mm.Platform.getPlatformByName(platform_name)
                 context = mm.Context(self.system, integrator, platform)            
             except Exception as e:
-                print "Exception occurred in creating Context: '%s'" % str(e)
+                #print "Exception occurred in creating Context: '%s'" % str(e)
 
                 platform_name = 'Reference'
-                print "Attempting to use fallback platform '%s'..." % platform_name
+                #print "Attempting to use fallback platform '%s'..." % platform_name
                 platform = mm.Platform.getPlatformByName(platform_name)
                 context = mm.Context(self.system, integrator, platform)            
 
@@ -490,7 +490,7 @@ class LangevinDynamicsMove(MCMCMove):
 
     """
 
-    def __init__(self, timestep=1.0*simtk.unit.femtosecond, collision_rate=10.0/simtk.unit.picoseconds, nsteps=1000, reassign_velocities=False):
+    def __init__(self, timestep=1.0*simtk.unit.femtosecond, collision_rate=10.0/simtk.unit.picoseconds, nsteps=1000, reassign_velocities=False, barostat_frequency=25):
         """
         Parameters
         ----------
@@ -502,6 +502,8 @@ class LangevinDynamicsMove(MCMCMove):
             The number of integration timesteps to take each time the move is applied.
         reassign_velocities : bool, optional, default = False
             If True, the velocities will be reassigned from the Maxwell-Boltzmann distribution at the beginning of the move.
+        barostat_frequency : int, optional, default = 25
+            If specified, a MonteCarloBarostat (if found) will have its frequency set to this value.
 
         Note
         ----
@@ -524,6 +526,7 @@ class LangevinDynamicsMove(MCMCMove):
         self.collision_rate = collision_rate
         self.nsteps = nsteps
         self.reassign_velocities = reassign_velocities
+        self.barostat_frequency = barostat_frequency
 
         return
 
@@ -563,6 +566,13 @@ class LangevinDynamicsMove(MCMCMove):
 
         """
         
+        # Check if the system contains a barostat.
+        system = sampler_state.system
+        forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+        if 'MonteCarloBarostat' in forces:
+            force = forces['MonteCarloBarostat']
+            force.setFrequency(self.barostat_frequency)
+
         # Create integrator.
         integrator = mm.LangevinIntegrator(thermodynamic_state.temperature, self.collision_rate, self.timestep)
 
@@ -646,7 +656,6 @@ class GHMCMove(MCMCMove):
 
         """
 
-        # User parameters.
         self.timestep = timestep
         self.collision_rate = collision_rate
         self.nsteps = nsteps
@@ -759,6 +768,13 @@ class GHMCMove(MCMCMove):
 
         """
         
+        # Disable barostat, if present, since this will mess up the GHMC scheme.
+        system = sampler_state.system
+        forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+        if 'MonteCarloBarostat' in forces:
+            force = forces['MonteCarloBarostat']
+            force.setFrequency(0)
+
         # Create integrator.
         integrator = integrators.GHMCIntegrator(temperature=thermodynamic_state.temperature, collision_rate=self.collision_rate, timestep=self.timestep)
 
@@ -834,8 +850,7 @@ class HMCMove(MCMCMove):
 
         """
 
-        # Set defaults
-        self.timestep = 1.0 * u.femtosecond
+        self.timestep = timestep
         self.nsteps = nsteps
 
         return
@@ -876,6 +891,13 @@ class HMCMove(MCMCMove):
 
         """
         
+        # Disable barostat, if present, since this will mess up the HMC scheme.
+        system = sampler_state.system
+        forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+        if 'MonteCarloBarostat' in forces:
+            force = forces['MonteCarloBarostat']
+            force.setFrequency(0)
+
         # Create integrator.
         integrator = integrators.HMCIntegrator(temperature=thermodynamic_state.temperature, timestep=self.timestep, nsteps=self.nsteps)
 
@@ -888,6 +910,137 @@ class HMCMove(MCMCMove):
         
         # Get sampler state.
         updated_sampler_state = MCMCSamplerState.createFromContext(context)
+
+        # Clean up.
+        del context
+
+        # Return updated sampler state.
+        return updated_sampler_state
+
+#=============================================================================================
+# Monte Carlo barostat move
+#=============================================================================================
+
+class MonteCarloBarostatMove(MCMCMove):
+    """
+    Monte Carlo barostat move.
+
+    This move makes one or more attempts to update the box volume using Monte Carlo updates.
+
+    Examples
+    --------
+
+    >>> # Create a test system
+    >>> import testsystems
+    >>> test = testsystems.IdealGas()
+    >>> # Create a sampler state.
+    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions, box_vectors=test.system.getDefaultPeriodicBoxVectors())
+    >>> # Create a thermodynamic state.
+    >>> from thermodynamics import ThermodynamicState
+    >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin, pressure=1*u.atmospheres)
+    >>> # Create a move set that includes a Monte Carlo barostat move.
+    >>> move_set = [ GHMCMove(nsteps=50), MonteCarloBarostatMove(nattempts=5) ]
+    >>> # Simulate on Reference platform.
+    >>> import simtk.openmm as mm
+    >>> platform = mm.Platform.getPlatformByName('Reference')
+    >>> sampler = MCMCSampler(thermodynamic_state, move_set=move_set, platform=platform)
+    >>> # Run a number of iterations of the sampler.
+    >>> updated_sampler_state = sampler.run(sampler_state, 10)    
+
+    """
+
+    def __init__(self, nattempts=5):
+        """
+        Parameters
+        ----------
+        nattempts : int
+           The number of Monte Carlo attempts to make to adjust the box volume.
+
+        Examples
+        --------
+
+        Create a Monte Carlo barostat move with default parameters.
+
+        >>> move = MonteCarloBarostatMove()
+
+        Create a Monte Carlo barostat move with specified parameters.
+
+        >>> move = MonteCarloBarostatMove(nattempts=10)
+
+        """        
+        self.nattempts = nattempts
+
+        return
+
+    def apply(self, thermodynamic_state, sampler_state, platform=None):
+        """
+        Apply the MCMC move.
+
+        Parameters
+        ----------
+        thermodynamic_state : ThermodynamicState
+           The thermodynamic state to use when applying the MCMC move
+        sampler_state : MCMCSamplerState
+           The sampler state to apply the move to
+        platform : simtk.openmm.Platform, optional, default = None
+           If not None, the specified platform will be used.
+
+        Returns
+        -------
+        updated_sampler_state : MCMCSamplerState
+           The updated sampler state
+
+        Examples
+        --------
+
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.LennardJonesFluid()
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions, box_vectors=test.system.getDefaultPeriodicBoxVectors())
+        >>> # Create a thermodynamic state.
+        >>> from thermodynamics import ThermodynamicState
+        >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin, pressure=1*u.atmospheres)
+        >>> # Create a Monte Carlo Barostat move.
+        >>> move = MonteCarloBarostatMove(nattempts=5)
+        >>> # Perform one update of the sampler state.
+        >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
+
+        """
+        
+        # Make sure system contains a barostat.
+        system = sampler_state.system
+        forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+        if 'MonteCarloBarostat' in forces:
+            force = forces['MonteCarloBarostat']
+            force.setTemperature(thermodynamic_state.temperature)
+            force.setFrequency(1)
+            parameter_name = force.Pressure()
+        else:
+            # Add MonteCarloBarostat.
+            force = mm.MonteCarloBarostat(thermodynamic_state.pressure, thermodynamic_state.temperature, 1)
+            system.addForce(force)
+            parameter_name = force.Pressure()
+
+        # Create integrator.
+        # TODO: Is there a way around this ugly hack?
+        integrator = mm.VerletIntegrator(0.0*u.femtoseconds)
+
+        # Create context.
+        context = sampler_state.createContext(integrator, platform=platform)
+
+        # Set pressure.
+        context.setParameter(parameter_name, thermodynamic_state.pressure)
+
+        # Run update.
+        # Note that ONE step of this integrator is equal to self.nsteps of velocity Verlet dynamics followed by Metropolis accept/reject.
+        integrator.step(1)
+        
+        # Get sampler state.
+        updated_sampler_state = MCMCSamplerState.createFromContext(context)
+
+        # Disable barostat.
+        force.setFrequency(0)
 
         # Clean up.
         del context
