@@ -7,7 +7,16 @@ import repex.testsystems
 
 from pymbar import timeseries
 
-analytical_testsystems = ["HarmonicOscillatorArray", "IdealGas"] # systems with analytical results to test
+from repex.mcmc import HMCMove, GHMCMove, LangevinDynamicsMove, MonteCarloBarostatMove
+
+# Test various combinations of systems and MCMC schemes
+analytical_testsystems = [
+    ( "HarmonicOscillatorArray", [ HMCMove() ] ), 
+    ( "HarmonicOscillatorArray", [ GHMCMove() ]),
+    ("HarmonicOscillatorArray", { GHMCMove() : 0.5, HMCMove() : 0.5 }),
+    ("HarmonicOscillatorArray", [ LangevinDynamicsMove() ]),
+    ("IdealGas", [ GHMCMove(), MonteCarloBarostatMove() ])
+    ]
 
 platform_name = "CUDA" # platform to use
 
@@ -17,13 +26,15 @@ debug = False # set to True only for manual debugging of this nose test
 
 def test_mcmc_expectations():
     # Select system:
-    for system_name in analytical_testsystems:
+    for [system_name, move_set] in analytical_testsystems:
         testsystem_class = getattr(repex.testsystems, system_name)
         testsystem = testsystem_class()
-        test_mcmc_expectation(testsystem)
+        test_mcmc_expectation(testsystem, move_set)
 
-def test_mcmc_expectation(testsystem):
-    if debug: print testsystem.__class__.__name__
+def test_mcmc_expectation(testsystem, move_set):
+    if debug: 
+        print testsystem.__class__.__name__
+        print str(move_set)
 
     # Test settings.
     temperature = 298.0 * units.kelvin
@@ -41,10 +52,6 @@ def test_mcmc_expectation(testsystem):
 
     # Select platform manually.
     platform = openmm.Platform.getPlatformByName(platform_name)
-
-    # Create MCMC move set.
-    from repex.mcmc import HMCMove, GHMCMove, LangevinDynamicsMove, MonteCarloBarostatMove
-    move_set = [ GHMCMove(), MonteCarloBarostatMove() ]
 
     # Create thermodynamic state
     from repex.thermodynamics import ThermodynamicState
