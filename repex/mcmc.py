@@ -83,6 +83,8 @@ import numpy
 import copy
 import time
 
+import numpy.random
+
 import simtk
 import simtk.openmm as mm
 import simtk.unit as u
@@ -95,6 +97,8 @@ from abc import abstractmethod
 # MODULE CONSTANTS
 #=============================================================================================
 
+_RANDOM_SEED_MAX = numpy.iinfo(numpy.int32).max # maximum random number seed value
+
 #=============================================================================================
 # MCMC sampler state
 #=============================================================================================
@@ -106,15 +110,32 @@ class MCMCSamplerState(object):
 
     Parameters
     ----------
+    system : simtk.openmm.System 
+       Current system specifying force calculations.    
     positions : array of simtk.unit.Quantity compatible with nanometers
        Particle positions.
     velocities : optional, array of simtk.unit.Quantity compatible with nanometers/picoseconds
        Particle velocities.
     box_vectors : optional, 3x3 array of simtk.unit.Quantity compatible with nanometers
        Current box vectors.
-    system : optional, simtk.openmm.System 
+
+    Fields
+    ------
+    system : simtk.openmm.System 
        Current system specifying force calculations.    
-    
+    positions : array of simtk.unit.Quantity compatible with nanometers
+       Particle positions.
+    velocities : optional, array of simtk.unit.Quantity compatible with nanometers/picoseconds
+       Particle velocities.
+    box_vectors : optional, 3x3 array of simtk.unit.Quantity compatible with nanometers
+       Current box vectors.
+    potential_energy : optional, simtk.unit.Quantity compatible with kilocalories_per_mole
+       Current potential energy.
+    kinetic_energy : optional, simtk.unit.Quantity compatible with kilocalories_per_mole
+       Current kinetic energy.
+    total_energy : optional, simtk.unit.Quantity compatible with kilocalories_per_mole
+       Current total energy.
+
     Examples
     --------
 
@@ -125,7 +146,7 @@ class MCMCSamplerState(object):
     >>> test = testsystems.LennardJonesFluid()
     >>> # Create a sampler state manually.
     >>> box_vectors = test.system.getDefaultPeriodicBoxVectors()
-    >>> sampler_state = MCMCSamplerState(positions=test.positions, box_vectors=box_vectors, system=test.system)
+    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions, box_vectors=box_vectors)
 
     Create a sampler state for a system without box vectors.
 
@@ -133,15 +154,32 @@ class MCMCSamplerState(object):
     >>> import testsystems
     >>> test = testsystems.LennardJonesCluster()
     >>> # Create a sampler state manually.
-    >>> sampler_state = MCMCSamplerState(positions=test.positions, system=test.system)
+    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
 
     """
-    def __init__(self, positions, velocities=None, box_vectors=None, system=None):
+    def __init__(self, system, positions, velocities=None, box_vectors=None):
+        self.system = copy.deepcopy(system)
         self.positions = positions
         self.velocities = velocities
         self.box_vectors = box_vectors
-        self.system = system
 
+        # Create Context.
+        context = self.createContext()
+        
+        # Get state.
+        openmm_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True)
+        
+        # Populate context.
+        self.positions = openmm_state.getPositions(asNumpy=True)
+        self.velocities = openmm_state.getVelocities(asNumpy=True)
+        self.box_vectors = openmm_state.getPeriodicBoxVectors(asNumpy=False)
+        self.potential_energy = openmm_state.getPotentialEnergy()
+        self.kinetic_energy = openmm_state.getKineticEnergy()
+        self.total_energy = self.potential_energy + self.kinetic_energy
+
+        # Clean up.
+        del context
+        
     @classmethod
     def createFromContext(cls, context):
         """
@@ -178,23 +216,32 @@ class MCMCSamplerState(object):
         >>> del context, integrator
 
         """
-        openmm_state = context.getState(getPositions=True, getVelocities=True)
+        # Get state.
+        openmm_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True)
         
-        positions = openmm_state.getPositions(asNumpy=True)
-        velocities = openmm_state.getVelocities(asNumpy=True)
-        box_vectors = openmm_state.getPeriodicBoxVectors(asNumpy=True)
-        system = context.getSystem()
+        # Create new object, bypassing init.
+        self = MCMCSamplerState.__new__(cls)
 
-        return MCMCSamplerState(positions=positions, velocities=velocities, box_vectors=box_vectors, system=system)
+        # Populate context.
+        self.system = copy.deepcopy(context.getSystem())
+        self.positions = openmm_state.getPositions(asNumpy=True)
+        self.velocities = openmm_state.getVelocities(asNumpy=True)
+        self.box_vectors = openmm_state.getPeriodicBoxVectors(asNumpy=True)
+        self.potential_energy = openmm_state.getPotentialEnergy()
+        self.kinetic_energy = openmm_state.getKineticEnergy()
+        self.total_energy = self.potential_energy + self.kinetic_energy
+        
+        return self
 
-    def createContext(self, integrator, platform=None):
+    def createContext(self, integrator=None, platform=None):
         """
         Create an OpenMM Context object from the current sampler state.
 
         Parameters
         ----------
-        integrator : simtk.openmm.Integrator
+        integrator : simtk.openmm.Integrator, optional, default=None
            The integrator to use for Context creation.
+           If not specified, a VerletIntegrator with 1 fs timestep is created.
         platform : simtk.openmm.Platform, optional, default=None
            If specified, the Platform to use for context creation.
 
@@ -240,11 +287,19 @@ class MCMCSamplerState(object):
         >>> context = sampler_state.createContext(integrator)
         >>> # Clean up.
         >>> del context
-        
+
+        TODO
+        ----
+        * Generalize fallback platform order to [CUDA, OpenCL, CPU, Reference] ordering.
+
         """
 
         if not self.system:
             raise Exception("MCMCSamplerState must have a 'system' object specified to create a Context")
+
+        # Use a Verlet integrator if none is specified.
+        if integrator is None:
+            integrator = mm.VerletIntegrator(1.0 * u.femtoseconds)
 
         # TODO: Make this less hacky, and introduce a fallback chain based on platform speeds.
         # TODO: Do something useful with debug output.
@@ -269,9 +324,15 @@ class MCMCSamplerState(object):
                 platform = mm.Platform.getPlatformByName(platform_name)
                 context = mm.Context(self.system, integrator, platform)            
 
+        # Set positions.
         context.setPositions(self.positions)
-        if self.velocities: context.setVelocities(self.velocities)
-        if self.box_vectors: 
+
+        # Set velocities, if specified.
+        if (self.velocities is not None): 
+            context.setVelocities(self.velocities)
+
+        # Set box vectors, if specified.
+        if (self.box_vectors is not None): 
             try:
                 # try tuple of box vectors
                 context.setPeriodicBoxVectors(self.box_vectors[0], self.box_vectors[1], self.box_vectors[2])
@@ -280,6 +341,40 @@ class MCMCSamplerState(object):
                 context.setPeriodicBoxVectors(self.box_vectors[0,:], self.box_vectors[1,:], self.box_vectors[2,:])
 
         return context
+
+    def minimize(self, tolerance=None, maxIterations=None, platform=None):
+        """
+        Minimize the current configuration.
+
+        Parameters
+        ----------
+        tolerance : 
+
+        maxIterations : 
+
+        platform : simtk.openmm.Platform, optional
+           Platform to use for minimization.
+
+        Examples
+        --------
+        
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.AlanineDipeptideVacuum()
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> # Minimize
+        >>> sampler_state = sampler_state.minimize()
+
+        """
+
+        context = self.createContext(platform=platform)
+        mm.LocalEnergyMinimizer.minimize(context) # DEBUG
+        sampler_state = MCMCSamplerState.createFromContext(context)
+        self.positions = sampler_state.positions
+        self.potential_energy = sampler_state.potential_energy
+        self.total_energy = sampler_state.total_energy
+        return
 
 #=============================================================================================
 # Monte Carlo Move abstract base class
@@ -429,6 +524,7 @@ class MCMCSampler(object):
         """
 
         # Make a deep copy of the sampler state so that initial state is unchanged.
+        # TODO: This seems to cause problems.  Let's figure this out later.
         sampler_state = copy.deepcopy(sampler_state)
 
         # Generate move sequence.
@@ -447,11 +543,11 @@ class MCMCSampler(object):
         
         # Apply move sequence.
         for move in move_sequence:
-            move.apply(self.thermodynamic_state, sampler_state, platform=self.platform)
+            sampler_state = move.apply(self.thermodynamic_state, sampler_state, platform=self.platform)
                 
         # Return the updated sampler state.
-        return sampler_state
-
+        return sampler_state        
+    
 #=============================================================================================
 # Langevin dynamics move
 #=============================================================================================
@@ -576,6 +672,10 @@ class LangevinDynamicsMove(MCMCMove):
         # Create integrator.
         integrator = mm.LangevinIntegrator(thermodynamic_state.temperature, self.collision_rate, self.timestep)
 
+        # Random number seed.
+        seed = numpy.random.randint(_RANDOM_SEED_MAX)
+        integrator.setRandomNumberSeed(seed)
+
         # Create context.
         context = sampler_state.createContext(integrator, platform=platform)
 
@@ -618,6 +718,8 @@ class GHMCMove(MCMCMove):
     >>> test = testsystems.AlanineDipeptideVacuum()
     >>> # Create a sampler state.
     >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+    >>> # Minimize.
+    >>> sampler_state.minimize()
     >>> # Create a thermodynamic state.
     >>> from thermodynamics import ThermodynamicState
     >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
@@ -628,7 +730,7 @@ class GHMCMove(MCMCMove):
 
     """
 
-    def __init__(self, timestep=1.0*simtk.unit.femtosecond, collision_rate=10.0/simtk.unit.picoseconds, nsteps=1000):
+    def __init__(self, timestep=1.0*simtk.unit.femtosecond, collision_rate=20.0/simtk.unit.picoseconds, nsteps=1000):
         """
         Parameters
         ----------
@@ -659,7 +761,7 @@ class GHMCMove(MCMCMove):
         self.timestep = timestep
         self.collision_rate = collision_rate
         self.nsteps = nsteps
-
+                
         self.reset_statistics()
 
         return
@@ -778,8 +880,17 @@ class GHMCMove(MCMCMove):
         # Create integrator.
         integrator = integrators.GHMCIntegrator(temperature=thermodynamic_state.temperature, collision_rate=self.collision_rate, timestep=self.timestep)
 
+        # Random number seed.
+        seed = numpy.random.randint(_RANDOM_SEED_MAX)
+        integrator.setRandomNumberSeed(seed)
+
         # Create context.
         context = sampler_state.createContext(integrator, platform=platform)
+
+        # TODO: Enforce constraints?
+        #tol = 1.0e-8
+        #context.applyConstraints(tol)
+        #context.applyVelocityConstraints(tol)
 
         # Run dynamics.
         integrator.step(self.nsteps)
@@ -793,6 +904,9 @@ class GHMCMove(MCMCMove):
         nattempted = integrator.getGlobalVariable(ghmc_global_variables['ntrials'])
         self.naccepted += naccepted
         self.nattempted += nattempted
+
+        # DEBUG.
+        #print "  GHMC accepted %d / %d (%.1f%%)" % (naccepted, nattempted, float(naccepted) / float(nattempted) * 100.0)
 
         # Clean up.
         del context
@@ -900,6 +1014,10 @@ class HMCMove(MCMCMove):
 
         # Create integrator.
         integrator = integrators.HMCIntegrator(temperature=thermodynamic_state.temperature, timestep=self.timestep, nsteps=self.nsteps)
+
+        # Random number seed.
+        seed = numpy.random.randint(_RANDOM_SEED_MAX)
+        integrator.setRandomNumberSeed(seed)
 
         # Create context.
         context = sampler_state.createContext(integrator, platform=platform)
@@ -1023,8 +1141,11 @@ class MonteCarloBarostatMove(MCMCMove):
             parameter_name = force.Pressure()
 
         # Create integrator.
-        # TODO: Is there a way around this ugly hack?
-        integrator = mm.VerletIntegrator(0.0*u.femtoseconds)
+        integrator = integrators.DummyIntegrator()
+
+        # Random number seed.
+        seed = numpy.random.randint(_RANDOM_SEED_MAX)
+        force.setRandomNumberSeed(seed)
 
         # Create context.
         context = sampler_state.createContext(integrator, platform=platform)
@@ -1039,6 +1160,9 @@ class MonteCarloBarostatMove(MCMCMove):
         # Get sampler state.
         updated_sampler_state = MCMCSamplerState.createFromContext(context)
 
+        # DEBUG
+        #print thermodynamic_state._volume(updated_sampler_state.box_vectors)
+        
         # Disable barostat.
         force.setFrequency(0)
 
