@@ -272,7 +272,7 @@ class HarmonicOscillator(TestSystem):
 
     Parameters
     ----------
-    K : simtk.unit.Quantity, optional, default=100.0 * units.kilocalories_per_mole/units.angstrom**2
+    K : simtk.unit.Quantity, optional, default=90.0 * units.kilocalories_per_mole/units.angstrom**2
         harmonic restraining potential
     mass : simtk.unit.Quantity, optional, default=39.948 * units.amu
         particle mass
