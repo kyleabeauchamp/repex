@@ -741,7 +741,7 @@ class LangevinDynamicsMove(MCMCMove):
         context_final_time = time.time()
 
         # Set pressure, if barostat is included.
-        if barostat:
+        if barostat is not None:
             context.setParameter(parameter_name, thermodynamic_state.pressure)
 
         if self.reassign_velocities:
