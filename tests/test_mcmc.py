@@ -269,14 +269,14 @@ niterations = 100 # number of production iterations
 #testsystem = testsystems.MolecularIdealGas()
 #testsystem = testsystems.AlanineDipeptideVacuum(constraints=None)
 #testsystem = testsystems.AlanineDipeptideVacuum(constraints=app.HBonds)
-testsystem = testsystems.AlanineDipeptideImplicit(constraints=app.HBonds)
+#testsystem = testsystems.AlanineDipeptideImplicit(constraints=app.HBonds)
 #testsystem = testsystems.AlanineDipeptideExplicit(constraints=app.HBonds, rigid_water=True)
 #testsystem = testsystems.Diatom(constraint=True, use_central_potential=True)
 #testsystem = testsystems.ConstraintCoupledHarmonicOscillator()
 #testsystem = testsystems.LysozymeImplicit(flexibleConstraints=False, shake=True)
 #testsystem = testsystems.HarmonicOscillator()
 #testsystem = testsystems.HarmonicOscillatorArray(N=16)
-#testsystem = testsystems.WaterBox(constrain=True, flexible=False)
+testsystem = testsystems.WaterBox()
 
 # Retrieve system and positions.
 [system, positions] = [testsystem.system, testsystem.positions]
@@ -297,8 +297,8 @@ options = dict()
 #options = {"OpenCLPrecision": "double", "CudaPrecision": "double"}
 #options = {"OpenCLPrecision": "single", "CudaPrecision": "single"}
 options = {"OpenCLPrecision": "mixed", "CudaPrecision": "mixed"}
-#for option in options:
-#   platform.setPropertyDefaultValue(option, options[option])
+for option in options:
+   platform.setPropertyDefaultValue(option, options[option])
 
 # Create Context and set positions and velocities.
 #context = openmm.Context(system, integrator, platform, options)
@@ -308,7 +308,10 @@ options = {"OpenCLPrecision": "mixed", "CudaPrecision": "mixed"}
 
 # Create MCMC move set.
 from repex.mcmc import HMCMove, GHMCMove, LangevinDynamicsMove, MonteCarloBarostatMove
-move_set = [ GHMCMove() ]
+#move_set = [ GHMCMove(nsteps=10), HMCMove(nsteps=10) ]
+move_set = [ GHMCMove(), MonteCarloBarostatMove() ]
+#move_set = [ GHMCMove() ]
+#move_set = [ LangevinDynamicsMove() ]
 
 # Create thermodynamic state
 from repex.thermodynamics import ThermodynamicState
@@ -345,8 +348,9 @@ for iteration in range(niterations):
     kinetic_energy = sampler_state.kinetic_energy
     total_energy = sampler_state.total_energy
     instantaneous_temperature = kinetic_energy * 2.0 / ndof / (units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA)
+    volume = sampler_state.volume
 
-    print "potential %8.1f kT | kinetic %8.1f kT | total %8.1f kT | instantaneous temperature: %8.1f K" % (potential_energy/kT, kinetic_energy/kT, total_energy/kT, instantaneous_temperature/units.kelvin)
+    print "potential %8.1f kT | kinetic %8.1f kT | total %8.1f kT | volume %8.3f nm^3 | instantaneous temperature: %8.1f K" % (potential_energy/kT, kinetic_energy/kT, total_energy/kT, volume/(units.nanometers**3), instantaneous_temperature/units.kelvin)
 
     # Accumulate statistics.
     x_n[iteration] = sampler_state.positions[0,0] / units.angstroms
@@ -394,3 +398,9 @@ else:
     print "  mean     observed %10.5f +- %10.5f  expected %10.5f  error %10.5f +- %10.5f (%.1f sigma) ***" % (temperature_mean, dtemperature_mean, temperature/units.kelvin, temperature_error, dtemperature_mean, nsigma)
 
 print ""
+
+# Report timings.
+for move in move_set:
+   print move.__class__.__name__
+   move.report_timing()
+   print ""

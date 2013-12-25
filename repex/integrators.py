@@ -368,7 +368,7 @@ def HMCIntegrator(temperature=298.0*simtk.unit.kelvin, nsteps=10, timestep=1*sim
     integrator.addComputePerDof("sigma", "sqrt(kT/m)")
 
     #
-    # Allow Context updating here.
+    # Allow Context updating here, outside of inner loop only.
     #
     integrator.addUpdateContextState(); 
 
@@ -389,7 +389,6 @@ def HMCIntegrator(temperature=298.0*simtk.unit.kelvin, nsteps=10, timestep=1*sim
     # Inner symplectic steps using velocity Verlet.
     #
     for step in range(nsteps):
-        integrator.addUpdateContextState()
         integrator.addComputePerDof("v", "v+0.5*dt*f/m")
         integrator.addComputePerDof("x", "x+dt*v")
         integrator.addComputePerDof("x1", "x")
