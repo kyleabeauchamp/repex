@@ -176,6 +176,7 @@ class MCMCSamplerState(object):
         self.potential_energy = openmm_state.getPotentialEnergy()
         self.kinetic_energy = openmm_state.getKineticEnergy()
         self.total_energy = self.potential_energy + self.kinetic_energy
+        self.volume = self.box_vectors[0][0] * self.box_vectors[1][1] * self.box_vectors[2][2] # TODO: Generalize to non rectilinear
 
         # Clean up.
         del context
@@ -230,6 +231,7 @@ class MCMCSamplerState(object):
         self.potential_energy = openmm_state.getPotentialEnergy()
         self.kinetic_energy = openmm_state.getKineticEnergy()
         self.total_energy = self.potential_energy + self.kinetic_energy
+        self.volume = self.box_vectors[0][0] * self.box_vectors[1][1] * self.box_vectors[2][2] # TODO: Generalize to non rectilinear
         
         return self
 
@@ -388,6 +390,39 @@ class MCMCMove(object):
     
     """
 
+    def reset_timing_statistics(self):
+        """
+        Reset the timing statistics.
+
+        """
+
+        self.elapsed_time = dict()
+    
+    def record_timing(self, timing_keyword, elapsed_time):
+        """
+        Record the elapsed time for a given phase of the calculation.
+
+        Parameters
+        ----------
+        timing_keyword : str
+           The keyword for which to store the elapsed time (e.g. 'context creation', 'integration', 'state extraction')
+        elapsed_time : float
+           The elapsed time, in seconds.
+
+        """
+        if timing_keyword not in self.elapsed_time:
+            self.elapsed_time[timing_keyword] = 0.0
+        self.elapsed_time[timing_keyword] += elapsed_time
+
+    def report_timing(self):
+        """
+        Report the timing for a move type.
+        
+        """
+        for timing_keyword in self.elapsed_time:
+            print "%24s %8.3f s" % (timing_keyword, self.elapsed_time[timing_keyword])
+        return
+
     @abstractmethod
     def apply(self, thermodynamic_state, sampler_state, platform=None):
         """
@@ -409,7 +444,7 @@ class MCMCMove(object):
 
 
         """
-        pass
+        pass    
 
 #=============================================================================================
 # Markov chain Monte Carlo sampler
@@ -624,6 +659,8 @@ class LangevinDynamicsMove(MCMCMove):
         self.reassign_velocities = reassign_velocities
         self.barostat_frequency = barostat_frequency
 
+        self.reset_timing_statistics()
+
         return
 
     def apply(self, thermodynamic_state, sampler_state, platform=None):
@@ -661,6 +698,8 @@ class LangevinDynamicsMove(MCMCMove):
         >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
 
         """
+
+        initial_time = time.time()
         
         # Check if the system contains a barostat.
         system = sampler_state.system
@@ -677,20 +716,34 @@ class LangevinDynamicsMove(MCMCMove):
         integrator.setRandomNumberSeed(seed)
 
         # Create context.
+        context_initial_time = time.time()
         context = sampler_state.createContext(integrator, platform=platform)
+        context_final_time = time.time()
 
         if self.reassign_velocities:
             # Assign Maxwell-Boltzmann velocities.        
             context.setVelocitiesToTemperature(thermodynamic_state.temperature)
         
         # Run dynamics.
+        integration_initial_time = time.time()
         integrator.step(self.nsteps)
-        
+        integration_final_time = time.time()
+
         # Get updated sampler state.
+        state_update_initial_time = time.time()
         updated_sampler_state = MCMCSamplerState.createFromContext(context)
+        state_update_final_time = time.time()
 
         # Clean up.
         del context
+
+        final_time = time.time()
+
+        # Record timing.
+        self.record_timing('context creation', context_final_time - context_initial_time)
+        self.record_timing('integration', integration_final_time - integration_initial_time)
+        self.record_timing('state update', state_update_final_time - state_update_initial_time)
+        self.record_timing('total', final_time - initial_time)
 
         return updated_sampler_state
     
@@ -763,6 +816,7 @@ class GHMCMove(MCMCMove):
         self.nsteps = nsteps
                 
         self.reset_statistics()
+        self.reset_timing_statistics()
 
         return
 
@@ -869,6 +923,8 @@ class GHMCMove(MCMCMove):
         >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
 
         """
+
+        initial_time = time.time()
         
         # Disable barostat, if present, since this will mess up the GHMC scheme.
         system = sampler_state.system
@@ -885,7 +941,9 @@ class GHMCMove(MCMCMove):
         integrator.setRandomNumberSeed(seed)
 
         # Create context.
+        context_initial_time = time.time()
         context = sampler_state.createContext(integrator, platform=platform)
+        context_final_time = time.time()
 
         # TODO: Enforce constraints?
         #tol = 1.0e-8
@@ -893,10 +951,14 @@ class GHMCMove(MCMCMove):
         #context.applyVelocityConstraints(tol)
 
         # Run dynamics.
+        integration_initial_time = time.time()
         integrator.step(self.nsteps)
+        integration_final_time = time.time()
         
         # Get updated sampler state.
+        state_update_initial_time = time.time()
         updated_sampler_state = MCMCSamplerState.createFromContext(context)
+        state_update_final_time = time.time()
         
         # Accumulate acceptance statistics.
         ghmc_global_variables = { integrator.getGlobalVariableName(index) : index for index in range(integrator.getNumGlobalVariables()) }
@@ -906,10 +968,18 @@ class GHMCMove(MCMCMove):
         self.nattempted += nattempted
 
         # DEBUG.
-        #print "  GHMC accepted %d / %d (%.1f%%)" % (naccepted, nattempted, float(naccepted) / float(nattempted) * 100.0)
+        print "  GHMC accepted %d / %d (%.1f%%)" % (naccepted, nattempted, float(naccepted) / float(nattempted) * 100.0)
 
         # Clean up.
         del context
+
+        final_time = time.time()
+
+        # Record timing.
+        self.record_timing('context creation', context_final_time - context_initial_time)
+        self.record_timing('integration', integration_final_time - integration_initial_time)
+        self.record_timing('state update', state_update_final_time - state_update_initial_time)
+        self.record_timing('total', final_time - initial_time)
 
         return updated_sampler_state
     
@@ -967,6 +1037,8 @@ class HMCMove(MCMCMove):
         self.timestep = timestep
         self.nsteps = nsteps
 
+        self.reset_timing_statistics()
+
         return
 
     def apply(self, thermodynamic_state, sampler_state, platform=None):
@@ -1005,6 +1077,8 @@ class HMCMove(MCMCMove):
 
         """
         
+        initial_time = time.time()
+
         # Disable barostat, if present, since this will mess up the HMC scheme.
         system = sampler_state.system
         forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
@@ -1020,17 +1094,31 @@ class HMCMove(MCMCMove):
         integrator.setRandomNumberSeed(seed)
 
         # Create context.
+        context_initial_time = time.time()
         context = sampler_state.createContext(integrator, platform=platform)
+        context_final_time = time.time()
 
         # Run dynamics.
         # Note that ONE step of this integrator is equal to self.nsteps of velocity Verlet dynamics followed by Metropolis accept/reject.
+        integration_initial_time = time.time()
         integrator.step(1)
+        integration_final_time = time.time()
         
         # Get sampler state.
+        state_update_initial_time = time.time()
         updated_sampler_state = MCMCSamplerState.createFromContext(context)
+        state_update_final_time = time.time()
 
         # Clean up.
         del context
+
+        final_time = time.time()
+
+        # Record timing.
+        self.record_timing('context creation', context_final_time - context_initial_time)
+        self.record_timing('integration', integration_final_time - integration_initial_time)
+        self.record_timing('state update', state_update_final_time - state_update_initial_time)
+        self.record_timing('total', final_time - initial_time)
 
         # Return updated sampler state.
         return updated_sampler_state
@@ -1088,6 +1176,8 @@ class MonteCarloBarostatMove(MCMCMove):
         """        
         self.nattempts = nattempts
 
+        self.reset_timing_statistics()
+
         return
 
     def apply(self, thermodynamic_state, sampler_state, platform=None):
@@ -1126,6 +1216,8 @@ class MonteCarloBarostatMove(MCMCMove):
 
         """
         
+        initial_time = time.time()
+
         # Make sure system contains a barostat.
         system = sampler_state.system
         forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
@@ -1148,17 +1240,23 @@ class MonteCarloBarostatMove(MCMCMove):
         force.setRandomNumberSeed(seed)
 
         # Create context.
+        context_initial_time = time.time()
         context = sampler_state.createContext(integrator, platform=platform)
+        context_final_time = time.time()
 
         # Set pressure.
         context.setParameter(parameter_name, thermodynamic_state.pressure)
 
         # Run update.
         # Note that ONE step of this integrator is equal to self.nsteps of velocity Verlet dynamics followed by Metropolis accept/reject.
-        integrator.step(1)
+        integration_initial_time = time.time()
+        integrator.step(self.nattempts)
+        integration_final_time = time.time()
         
         # Get sampler state.
+        state_update_initial_time = time.time()
         updated_sampler_state = MCMCSamplerState.createFromContext(context)
+        state_update_final_time = time.time()
 
         # DEBUG
         #print thermodynamic_state._volume(updated_sampler_state.box_vectors)
@@ -1168,6 +1266,14 @@ class MonteCarloBarostatMove(MCMCMove):
 
         # Clean up.
         del context
+
+        final_time = time.time()
+
+        # Record timing.
+        self.record_timing('context creation', context_final_time - context_initial_time)
+        self.record_timing('integration', integration_final_time - integration_initial_time)
+        self.record_timing('state update', state_update_final_time - state_update_initial_time)
+        self.record_timing('total', final_time - initial_time)
 
         # Return updated sampler state.
         return updated_sampler_state
