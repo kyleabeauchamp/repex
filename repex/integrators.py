@@ -60,6 +60,32 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 # INTEGRATORS
 #=============================================================================================
 
+def DummyIntegrator():
+    """
+    Construct a dummy integrator that does nothing except update call the force updates.
+
+    Returns
+    -------
+    integrator : simtk.openmm.CustomIntegrator
+        A dummy integrator.
+
+    Examples
+    --------
+    
+    Create a dummy integrator.
+    
+    >>> integrator = DummyIntegrator()
+
+    """
+    
+    timestep = 0.0 * units.femtoseconds
+    integrator = mm.CustomIntegrator(timestep)
+    integrator.addUpdateContextState()
+    integrator.addConstrainPositions()
+    integrator.addConstrainVelocities()
+    
+    return integrator
+
 def VelocityVerletIntegrator(timestep=1.0*simtk.unit.femtoseconds):
     """
     Construct a velocity Verlet integrator.
@@ -468,6 +494,11 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     # Allow context updating here.
     #
     integrator.addUpdateContextState();
+
+    #
+    # Constrain positions.
+    #
+    integrator.addConstrainPositions();
 
     # 
     # Velocity perturbation.
