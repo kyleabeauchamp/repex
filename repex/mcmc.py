@@ -621,7 +621,7 @@ class LangevinDynamicsMove(MCMCMove):
 
     """
 
-    def __init__(self, timestep=1.0*simtk.unit.femtosecond, collision_rate=10.0/simtk.unit.picoseconds, nsteps=1000, reassign_velocities=False, barostat_frequency=25):
+    def __init__(self, timestep=1.0*simtk.unit.femtosecond, collision_rate=10.0/simtk.unit.picoseconds, nsteps=1000, reassign_velocities=False):
         """
         Parameters
         ----------
@@ -633,12 +633,11 @@ class LangevinDynamicsMove(MCMCMove):
             The number of integration timesteps to take each time the move is applied.
         reassign_velocities : bool, optional, default = False
             If True, the velocities will be reassigned from the Maxwell-Boltzmann distribution at the beginning of the move.
-        barostat_frequency : int, optional, default = 25
-            If specified, a MonteCarloBarostat (if found) will have its frequency set to this value.
-
+       
         Note
         ----
         The temperature of the thermodynamic state is used in Langevin dynamics.
+        If a barostat is present, the temperature and pressure will be set to the thermodynamic state being simulated.
 
         Examples
         --------
@@ -657,7 +656,6 @@ class LangevinDynamicsMove(MCMCMove):
         self.collision_rate = collision_rate
         self.nsteps = nsteps
         self.reassign_velocities = reassign_velocities
-        self.barostat_frequency = barostat_frequency
 
         self.reset_timing_statistics()
 
@@ -683,7 +681,9 @@ class LangevinDynamicsMove(MCMCMove):
 
         Examples
         --------
-        
+
+        Alanine dipeptide in vacuum.
+
         >>> # Create a test system
         >>> import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
@@ -697,6 +697,24 @@ class LangevinDynamicsMove(MCMCMove):
         >>> # Perform one update of the sampler state.
         >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
 
+        Ideal gas.
+
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.IdealGas()
+        >>> # Add a MonteCarloBarostat.
+        >>> barostat = mm.MonteCarloBarostat(1*u.atmospheres, 298*u.kelvin, 25)
+        >>> force_index = test.system.addForce(barostat)
+        >>> # Create a sampler state.
+        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> # Create a thermodynamic state.
+        >>> from thermodynamics import ThermodynamicState
+        >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
+        >>> # Create a LangevinDynamicsMove
+        >>> move = LangevinDynamicsMove(nsteps=500, timestep=0.5*u.femtoseconds, collision_rate=20.0/u.picoseconds)
+        >>> # Perform one update of the sampler state.
+        >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
+
         """
 
         initial_time = time.time()
@@ -704,9 +722,11 @@ class LangevinDynamicsMove(MCMCMove):
         # Check if the system contains a barostat.
         system = sampler_state.system
         forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+        barostat = None
         if 'MonteCarloBarostat' in forces:
-            force = forces['MonteCarloBarostat']
-            force.setFrequency(self.barostat_frequency)
+            barostat = forces['MonteCarloBarostat']
+            barostat.setTemperature(thermodynamic_state.temperature)            
+            parameter_name = barostat.getParameter()
 
         # Create integrator.
         integrator = mm.LangevinIntegrator(thermodynamic_state.temperature, self.collision_rate, self.timestep)
@@ -719,6 +739,10 @@ class LangevinDynamicsMove(MCMCMove):
         context_initial_time = time.time()
         context = sampler_state.createContext(integrator, platform=platform)
         context_final_time = time.time()
+
+        # Set pressure, if barostat is included.
+        if barostat:
+            context.setParameter(parameter_name, thermodynamic_state.pressure)
 
         if self.reassign_velocities:
             # Assign Maxwell-Boltzmann velocities.        
@@ -926,13 +950,6 @@ class GHMCMove(MCMCMove):
 
         initial_time = time.time()
         
-        # Disable barostat, if present, since this will mess up the GHMC scheme.
-        system = sampler_state.system
-        forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
-        if 'MonteCarloBarostat' in forces:
-            force = forces['MonteCarloBarostat']
-            force.setFrequency(0)
-
         # Create integrator.
         integrator = integrators.GHMCIntegrator(temperature=thermodynamic_state.temperature, collision_rate=self.collision_rate, timestep=self.timestep)
 
@@ -1079,13 +1096,6 @@ class HMCMove(MCMCMove):
         
         initial_time = time.time()
 
-        # Disable barostat, if present, since this will mess up the HMC scheme.
-        system = sampler_state.system
-        forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
-        if 'MonteCarloBarostat' in forces:
-            force = forces['MonteCarloBarostat']
-            force.setFrequency(0)
-
         # Create integrator.
         integrator = integrators.HMCIntegrator(temperature=thermodynamic_state.temperature, timestep=self.timestep, nsteps=self.nsteps)
 
@@ -1221,9 +1231,11 @@ class MonteCarloBarostatMove(MCMCMove):
         # Make sure system contains a barostat.
         system = sampler_state.system
         forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+        old_barostat_frequency = None
         if 'MonteCarloBarostat' in forces:
             force = forces['MonteCarloBarostat']
-            force.setTemperature(thermodynamic_state.temperature)
+            force.setTemperature(thermodynamic_state.temperature)            
+            old_barostat_frequency = force.getFrequency()
             force.setFrequency(1)
             parameter_name = force.Pressure()
         else:
@@ -1261,11 +1273,12 @@ class MonteCarloBarostatMove(MCMCMove):
         # DEBUG
         #print thermodynamic_state._volume(updated_sampler_state.box_vectors)
         
-        # Disable barostat.
-        force.setFrequency(0)
-
         # Clean up.
         del context
+
+        # Restore frequency of barostat.
+        if old_barostat_frequency:
+            force.setFrequency(old_barostat_frequency)
 
         final_time = time.time()
 
