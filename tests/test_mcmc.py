@@ -265,7 +265,7 @@ nequil = 10 # number of equilibration iterations
 niterations = 100 # number of production iterations
 
 # Select system:
-#testsystem = testsystems.IdealGas()
+testsystem = testsystems.IdealGas()
 #testsystem = testsystems.MolecularIdealGas()
 #testsystem = testsystems.AlanineDipeptideVacuum(constraints=None)
 #testsystem = testsystems.AlanineDipeptideVacuum(constraints=app.HBonds)
@@ -276,7 +276,7 @@ niterations = 100 # number of production iterations
 #testsystem = testsystems.LysozymeImplicit(flexibleConstraints=False, shake=True)
 #testsystem = testsystems.HarmonicOscillator()
 #testsystem = testsystems.HarmonicOscillatorArray(N=16)
-testsystem = testsystems.WaterBox()
+#testsystem = testsystems.WaterBox()
 
 # Retrieve system and positions.
 [system, positions] = [testsystem.system, testsystem.positions]
@@ -365,7 +365,9 @@ x_mean_exact = 0.0 # mean, in angstroms
 x_std_exact = 1.0 / units.sqrt(beta * K) / units.angstroms # std dev, in angstroms
 
 # Analyze statistics.
-g = statisticalInefficiency(potential_n) 
+g = 1.0
+if potential_n.std() > 0.0:
+   g = statisticalInefficiency(potential_n) 
 Neff = niterations / g # number of effective samples
 
 x_mean = x_n.mean()
