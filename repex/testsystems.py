@@ -1422,17 +1422,9 @@ class IdealGas(TestSystem):
 # Water box
 #=============================================================================================
 
-def WaterBox(box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers):
+class WaterBox(TestSystem):
    """
    Create a water box test system.
-
-   Parameters
-   ----------
-
-   box_edge : simtk.unit.Quantity with units compatible with nanometers, optional, default = 2.5 nm
-      Edge length for cubic box [should be greater than 2*cutoff]
-   cutoff : simtk.unit.Quantity with units compatible with nanometers, optional, default = 0.9 nm
-      Nonbonded cutoff
 
    Examples
    --------
@@ -1447,40 +1439,66 @@ def WaterBox(box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers):
 
    """
 
-   import simtk.openmm.app as app
+   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers):
+       """
+       Create a water box test system.
+       
+       Parameters
+       ----------
+       
+       box_edge : simtk.unit.Quantity with units compatible with nanometers, optional, default = 2.5 nm
+          Edge length for cubic box [should be greater than 2*cutoff]
+       cutoff : simtk.unit.Quantity with units compatible with nanometers, optional, default = 0.9 nm
+          Nonbonded cutoff
+       
+       Examples
+       --------
+       
+       Create a default waterbox.
+       
+       >>> waterbox = WaterBox()
+       >>> [system, positions] = [waterbox.system, waterbox.positions]
+       
+       Control the cutoff.
+       
+       >>> waterbox = WaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+       
+       """
 
-   # Load forcefield for solvent model.
-   ff =  app.ForceField('tip3p.xml')
-
-   # Create empty topology and coordinates.
-   top = app.Topology()
-   pos = units.Quantity((), units.angstroms)
-
-   # Create new Modeller instance.
-   m = app.Modeller(top, pos)
-
-   # Add solvent to specified box dimensions.
-   boxSize = units.Quantity(numpy.ones([3]) * box_edge/box_edge.unit, box_edge.unit)
-   m.addSolvent(ff, boxSize=boxSize)
+       import simtk.openmm.app as app
+       
+       # Load forcefield for solvent model.
+       ff =  app.ForceField('tip3p.xml')
+       
+       # Create empty topology and coordinates.
+       top = app.Topology()
+       pos = units.Quantity((), units.angstroms)
+       
+       # Create new Modeller instance.
+       m = app.Modeller(top, pos)
+       
+       # Add solvent to specified box dimensions.
+       boxSize = units.Quantity(numpy.ones([3]) * box_edge/box_edge.unit, box_edge.unit)
+       m.addSolvent(ff, boxSize=boxSize)
    
-   # Get new topology and coordinates.
-   newtop = m.getTopology()
-   newpos = m.getPositions()
+       # Get new topology and coordinates.
+       newtop = m.getTopology()
+       newpos = m.getPositions()
    
-   # Convert positions to numpy.
-   positions = units.Quantity(numpy.array(newpos / newpos.unit), newpos.unit)
+       # Convert positions to numpy.
+       positions = units.Quantity(numpy.array(newpos / newpos.unit), newpos.unit)
    
-   # Create OpenMM System.
-   nonbondedMethod = app.CutoffPeriodic
-   constraints = app.HBonds
-   system = ff.createSystem(newtop, nonbondedMethod=nonbondedMethod, nonbondedCutoff=cutoff, constraints=constraints, rigidWater=True, removeCMMotion=False)
+       # Create OpenMM System.
+       nonbondedMethod = app.CutoffPeriodic
+       constraints = app.HBonds
+       system = ff.createSystem(newtop, nonbondedMethod=nonbondedMethod, nonbondedCutoff=cutoff, constraints=constraints, rigidWater=True, removeCMMotion=False)
 
-   # Turn on switching function.
-   forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
-   forces['NonbondedForce'].setUseSwitchingFunction(True)
-   forces['NonbondedForce'].setSwitchingDistance(cutoff - 0.5 * units.angstroms)
-
-   return [system, positions]
+       # Turn on switching function.
+       forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+       forces['NonbondedForce'].setUseSwitchingFunction(True)
+       forces['NonbondedForce'].setSwitchingDistance(cutoff - 0.5 * units.angstroms)
+       
+       self.system, self.positions = system, positions
 
 #=============================================================================================
 # Alanine dipeptide in vacuum.
@@ -1514,6 +1532,7 @@ class AlanineDipeptideVacuum(TestSystem):
         positions = inpcrd.getPositions(asNumpy=True)
 
         self.system, self.positions = system, positions
+
 #=============================================================================================
 # Alanine dipeptide in implicit solvent.
 #=============================================================================================
