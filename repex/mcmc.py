@@ -968,7 +968,7 @@ class GHMCMove(MCMCMove):
         self.nattempted += nattempted
 
         # DEBUG.
-        print "  GHMC accepted %d / %d (%.1f%%)" % (naccepted, nattempted, float(naccepted) / float(nattempted) * 100.0)
+        #print "  GHMC accepted %d / %d (%.1f%%)" % (naccepted, nattempted, float(naccepted) / float(nattempted) * 100.0)
 
         # Clean up.
         del context
