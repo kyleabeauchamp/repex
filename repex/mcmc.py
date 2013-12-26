@@ -310,6 +310,8 @@ class MCMCSamplerState(object):
                 context = mm.Context(self.system, integrator, platform)
             else:
                 context = mm.Context(self.system, integrator)
+            # Make sure we won't fail during an integration step.
+            integrator.step(0)
         except Exception as e:
             #print "Exception occurred in creating Context: '%s'" % str(e)
 
@@ -318,6 +320,8 @@ class MCMCSamplerState(object):
                 #print "Attempting to use fallback platform '%s'..." % platform_name
                 platform = mm.Platform.getPlatformByName(platform_name)
                 context = mm.Context(self.system, integrator, platform)            
+                # Make sure we won't fail during an integration step.
+                integrator.step(0)
             except Exception as e:
                 #print "Exception occurred in creating Context: '%s'" % str(e)
 
