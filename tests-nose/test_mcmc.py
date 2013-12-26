@@ -18,8 +18,6 @@ analytical_testsystems = [
     ("IdealGas", [ GHMCMove(), MonteCarloBarostatMove() ])
     ]
 
-platform_name = "CUDA" # platform to use
-
 NSIGMA_CUTOFF = 6.0 # cutoff for significance testing
 
 debug = False # set to True only for manual debugging of this nose test
@@ -29,9 +27,9 @@ def test_mcmc_expectations():
     for [system_name, move_set] in analytical_testsystems:
         testsystem_class = getattr(repex.testsystems, system_name)
         testsystem = testsystem_class()
-        test_mcmc_expectation(testsystem, move_set)
+        subtest_mcmc_expectation(testsystem, move_set)
 
-def test_mcmc_expectation(testsystem, move_set):
+def subtest_mcmc_expectation(testsystem, move_set):
     if debug: 
         print testsystem.__class__.__name__
         print str(move_set)
@@ -50,16 +48,13 @@ def test_mcmc_expectation(testsystem, move_set):
     kT = kB * temperature
     ndof = 3*system.getNumParticles() - system.getNumConstraints()
 
-    # Select platform manually.
-    platform = openmm.Platform.getPlatformByName(platform_name)
-
     # Create thermodynamic state
     from repex.thermodynamics import ThermodynamicState
     thermodynamic_state = ThermodynamicState(system=testsystem.system, temperature=temperature, pressure=pressure)
 
     # Create MCMC sampler.
     from repex.mcmc import MCMCSampler
-    sampler = MCMCSampler(thermodynamic_state, move_set=move_set, platform=platform)
+    sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
 
     # Create sampler state.
     from repex.mcmc import MCMCSamplerState
