@@ -517,3 +517,11 @@ class ThermodynamicState(object):
         A = np.array([a/a.unit, b/a.unit, c/a.unit])
         volume = np.linalg.det(A) * a.unit**3
         return volume
+
+#=============================================================================================
+# MAIN AND TESTS
+#=============================================================================================
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()

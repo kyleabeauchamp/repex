@@ -5,7 +5,7 @@
 #=============================================================================================
 
 """
-Test a variety of custom integrators.
+Test the MCMC facility.
 
 DESCRIPTION
 
@@ -48,6 +48,7 @@ from simtk.openmm import app
 
 from repex import testsystems
 from repex import integrators 
+from repex import mcmc
 
 #=============================================================================================
 # CONSTANTS
@@ -256,17 +257,15 @@ def statisticalInefficiency(A_n, B_n=None, fast=False, mintime=3):
 #=============================================================================================
 
 # Test integrator.
-timestep = 1.0 * units.femtosecond
 temperature = 298.0 * units.kelvin
+pressure = 1.0 * units.atmospheres
 kT = kB * temperature
-collision_rate = 20.0 / units.picosecond
-tolerance = 1.0e-8 # constraint tolerance
 
-nsteps = 1000 # number of timesteps per iteration
-nequil = 50 # number of equilibration iterations
+nequil = 10 # number of equilibration iterations
 niterations = 100 # number of production iterations
 
 # Select system:
+testsystem = testsystems.IdealGas()
 #testsystem = testsystems.MolecularIdealGas()
 #testsystem = testsystems.AlanineDipeptideVacuum(constraints=None)
 #testsystem = testsystems.AlanineDipeptideVacuum(constraints=app.HBonds)
@@ -275,9 +274,9 @@ niterations = 100 # number of production iterations
 #testsystem = testsystems.Diatom(constraint=True, use_central_potential=True)
 #testsystem = testsystems.ConstraintCoupledHarmonicOscillator()
 #testsystem = testsystems.LysozymeImplicit(flexibleConstraints=False, shake=True)
-testsystem = testsystems.HarmonicOscillator()
+#testsystem = testsystems.HarmonicOscillator()
 #testsystem = testsystems.HarmonicOscillatorArray(N=16)
-#testsystem = testsystems.WaterBox(constrain=True, flexible=False)
+#testsystem = testsystems.WaterBox()
 
 # Retrieve system and positions.
 [system, positions] = [testsystem.system, testsystem.positions]
@@ -285,104 +284,79 @@ testsystem = testsystems.HarmonicOscillator()
 #velocities = generateMaxwellBoltzmannVelocities(system, temperature)
 ndof = 3*system.getNumParticles() - system.getNumConstraints()
 
-# Select integrator:
-#integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
-#integrator = integrators.AndersenVelocityVerletIntegrator(temperature=temperature, timestep=timestep)
-#integrator = integrators.MetropolisMonteCarloIntegrator(timestep=timestep, temperature=temperature, sigma=0.01*units.angstroms)
-#integrator = integrators.HMCIntegrator(timestep=timestep, temperature=temperature)
-#integrator = integrators.VVVRIntegrator(timestep=timestep, temperature=temperature, collision_rate=collision_rate)
-integrator = integrators.GHMCIntegrator(timestep=timestep, temperature=temperature, collision_rate=collision_rate)
-#integrator = integrators.VelocityVerletIntegrator(timestep)
-#integrator = openmm.VerletIntegrator(timestep)
-
 # Use default constraint tolerance.
 #tolerance = integrator.getConstraintTolerance()
 
 # Set constraint tolerance
-integrator.setConstraintTolerance(tolerance)
+#integrator.setConstraintTolerance(tolerance)
 
 # Select platform manually.
-platform_name = 'Reference'
+platform_name = 'CUDA'
 platform = openmm.Platform.getPlatformByName(platform_name)
-options = {}
+options = dict()
 #options = {"OpenCLPrecision": "double", "CudaPrecision": "double"}
 #options = {"OpenCLPrecision": "single", "CudaPrecision": "single"}
-#options = {"OpenCLPrecision": "mixed", "CudaPrecision": "mixed"}
+options = {"OpenCLPrecision": "mixed", "CudaPrecision": "mixed"}
+for option in options:
+   platform.setPropertyDefaultValue(option, options[option])
 
 # Create Context and set positions and velocities.
-context = openmm.Context(system, integrator, platform, options)
-context.setPositions(positions)
-context.applyConstraints(tolerance)
+#context = openmm.Context(system, integrator, platform, options)
+#context.setPositions(positions)
+#context.applyConstraints(tolerance)
+#print context.getPlatform().getName()
 
-print context.getPlatform().getName()
+# Create MCMC move set.
+from repex.mcmc import HMCMove, GHMCMove, LangevinDynamicsMove, MonteCarloBarostatMove
+#move_set = [ GHMCMove(nsteps=10), HMCMove(nsteps=10) ]
+move_set = [ GHMCMove(), MonteCarloBarostatMove() ]
+#move_set = [ GHMCMove() ]
+#move_set = [ LangevinDynamicsMove() ]
 
-# Minimize
-openmm.LocalEnergyMinimizer.minimize(context, 0.1*units.kilojoules_per_mole/units.angstroms, 50)
+# Create thermodynamic state
+from repex.thermodynamics import ThermodynamicState
+thermodynamic_state = ThermodynamicState(system=testsystem.system, temperature=temperature, pressure=pressure)
+
+# Create MCMC sampler.
+from repex.mcmc import MCMCSampler
+sampler = MCMCSampler(thermodynamic_state, move_set=move_set, platform=platform)
+
+# Create sampler state.
+from repex.mcmc import MCMCSamplerState
+sampler_state = MCMCSamplerState(system=testsystem.system, positions=testsystem.positions)
 
 # Equilibrate
 for iteration in range(nequil):
-    print "equilibration iteration %d / %d : propagating for %d steps..." % (iteration, nequil, nsteps)
+    print "equilibration iteration %d / %d" % (iteration, nequil)
 
-    # Assign velocities.
-    context.setVelocitiesToTemperature(temperature)
-    
-    # Integrate
-    integrator.step(nsteps)
+    # Update sampler state.
+    sampler_state = sampler.run(sampler_state, 1)
 
 # Accumulate statistics.
 x_n = numpy.zeros([niterations], numpy.float64) # x_n[i] is the x position of atom 1 after iteration i, in angstroms
 potential_n = numpy.zeros([niterations], numpy.float64) # potential_n[i] is the potential energy after iteration i, in kT
 kinetic_n = numpy.zeros([niterations], numpy.float64) # kinetic_n[i] is the kinetic energy after iteration i, in kT
 temperature_n = numpy.zeros([niterations], numpy.float64) # temperature_n[i] is the instantaneous kinetic temperature from iteration i, in K
-delta_n = numpy.zeros([niterations], numpy.float64) # delta_n[i] is the change in total energy from iteration i, in kT
 for iteration in range(niterations):
-    print "iteration %d / %d : propagating for %d steps..." % (iteration, niterations, nsteps)
+    print "iteration %d / %d" % (iteration, niterations)
 
-    # Assign velocities.
-    #context.setVelocitiesToTemperature(temperature)
-    #context.applyConstraints(tolerance)
-    #context.applyVelocityConstraints(tolerance)
-    #integrator.step(1)
+    # Update sampler state.
+    sampler_state = sampler.run(sampler_state, 1)
 
-    state = context.getState(getEnergy=True)
-    initial_potential_energy = state.getPotentialEnergy()
-    initial_kinetic_energy = state.getKineticEnergy()
-    initial_total_energy = initial_kinetic_energy + initial_potential_energy
-    
-    initial_time = time.time()
+    # Get statistics.
+    potential_energy = sampler_state.potential_energy
+    kinetic_energy = sampler_state.kinetic_energy
+    total_energy = sampler_state.total_energy
+    instantaneous_temperature = kinetic_energy * 2.0 / ndof / (units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA)
+    volume = sampler_state.volume
 
-    integrator.step(nsteps)
-
-    state = context.getState(getEnergy=True, getPositions=True)
-    final_potential_energy = state.getPotentialEnergy()
-    final_kinetic_energy = state.getKineticEnergy()
-    final_total_energy = final_kinetic_energy + final_potential_energy
-
-    final_time = time.time()
-    elapsed_time = final_time - initial_time
-    
-    delta_total_energy = final_total_energy - initial_total_energy
-    instantaneous_temperature = final_kinetic_energy * 2.0 / ndof / (units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA)
-
-    print "total energy: initial %8.1f kT | final %8.1f kT | delta = %8.3f kT | instantaneous temperature: %8.1f K | time %.3f s" % (initial_total_energy/kT, final_total_energy/kT, delta_total_energy/kT, instantaneous_temperature/units.kelvin, elapsed_time)
-
-    #pseudowork = integrator.getGlobalVariable(0) * units.kilojoules_per_mole / kT
-    #b = integrator.getGlobalVariable(2)
-    #c = integrator.getGlobalVariable(3)
-    #print (pseudowork, b, c)
-
-#    global_variables = { integrator.getGlobalVariableName(index) : index for index in range(integrator.getNumGlobalVariables()) }
-#    naccept = integrator.getGlobalVariable(global_variables['naccept'])
-#    ntrials = integrator.getGlobalVariable(global_variables['ntrials'])
-#    print "accepted %d / %d (%.3f %%)" % (naccept, ntrials, float(naccept)/float(ntrials)*100.0)
+    print "potential %8.1f kT | kinetic %8.1f kT | total %8.1f kT | volume %8.3f nm^3 | instantaneous temperature: %8.1f K" % (potential_energy/kT, kinetic_energy/kT, total_energy/kT, volume/(units.nanometers**3), instantaneous_temperature/units.kelvin)
 
     # Accumulate statistics.
-    x_n[iteration] = state.getPositions(asNumpy=True)[0,0] / units.angstroms
-    potential_n[iteration] = final_potential_energy / kT
-    kinetic_n[iteration] = final_kinetic_energy / kT
+    x_n[iteration] = sampler_state.positions[0,0] / units.angstroms
+    potential_n[iteration] = potential_energy / kT
+    kinetic_n[iteration] = kinetic_energy / kT
     temperature_n[iteration] = instantaneous_temperature / units.kelvin
-    delta_n[iteration] = delta_total_energy / kT
-
 
 # Compute expected statistics for harmonic oscillator.
 K = 100.0 * units.kilocalories_per_mole / units.angstroms**2
@@ -391,7 +365,9 @@ x_mean_exact = 0.0 # mean, in angstroms
 x_std_exact = 1.0 / units.sqrt(beta * K) / units.angstroms # std dev, in angstroms
 
 # Analyze statistics.
-g = statisticalInefficiency(potential_n) 
+g = 1.0
+if potential_n.std() > 0.0:
+   g = statisticalInefficiency(potential_n) 
 Neff = niterations / g # number of effective samples
 
 x_mean = x_n.mean()
@@ -411,9 +387,6 @@ temperature_error = temperature_mean - temperature/units.kelvin
 nsigma = abs(temperature_error) / dtemperature_mean
 nsigma_cutoff = 6.0
 
-delta_mean = delta_n.mean()
-ddelta_mean = delta_n.std() / numpy.sqrt(Neff)
-
 # TODO: Rework ugly statistics calculation and add nsigma deviation information.
 
 print "positions"
@@ -427,5 +400,9 @@ else:
     print "  mean     observed %10.5f +- %10.5f  expected %10.5f  error %10.5f +- %10.5f (%.1f sigma) ***" % (temperature_mean, dtemperature_mean, temperature/units.kelvin, temperature_error, dtemperature_mean, nsigma)
 
 print ""
-print "drift"
-print "  mean   observed %10.5f +- %10.5f kT" % (delta_mean, ddelta_mean)
+
+# Report timings.
+for move in move_set:
+   print move.__class__.__name__
+   move.report_timing()
+   print ""

@@ -272,7 +272,7 @@ class HarmonicOscillator(TestSystem):
 
     Parameters
     ----------
-    K : simtk.unit.Quantity, optional, default=100.0 * units.kilocalories_per_mole/units.angstrom**2
+    K : simtk.unit.Quantity, optional, default=90.0 * units.kilocalories_per_mole/units.angstrom**2
         harmonic restraining potential
     mass : simtk.unit.Quantity, optional, default=39.948 * units.amu
         particle mass
@@ -1423,193 +1423,82 @@ class IdealGas(TestSystem):
 #=============================================================================================
 
 class WaterBox(TestSystem):
-    """Create a test system containing a periodic box of TIP3P water.
+   """
+   Create a water box test system.
 
-    Flexible bonds and angles are always added, and constraints are optional (but on by default).
-    Addition of flexible bond and angle terms doesn't affect constrained dynamics, but allows for minimization to work properly.
+   Examples
+   --------
+   
+   Create a default waterbox.
 
-    Parameters
-    ----------
-    constrain : bool, optional, default=True
-        if True, will also constrain OH and HH bonds in water (default: True)    
-    flexible : bool, optional, default=True,
-        if True, will add harmonic OH bonds and HOH angle between
-    cutoff : Quantity, optional, default=None,
-        If None, defaults to box_size / 2.0 * 0.999
-    nonbonded_method : default=None
-    filename : str, optional, default="watbox216.pdb"
-        name of file containing water positions    
-    charges : bool, optional, default=True        
-    
-    Examples
-    --------
+   >>> waterbox = WaterBox()
 
-    Create a 216-water system.
-    
-    >>> water_box = WaterBox()
-    >>> (system, positions) = water_box.system, water_box.positions
+   Control the cutoff.
+   
+   >>> waterbox = WaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
 
-    TODO
-    ----
+   """
 
-    * Allow size of box (either dimensions or number of waters) to be specified, replicating equilibrated waterbox to fill these dimensions.
+   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers):
+       """
+       Create a water box test system.
+       
+       Parameters
+       ----------
+       
+       box_edge : simtk.unit.Quantity with units compatible with nanometers, optional, default = 2.5 nm
+          Edge length for cubic box [should be greater than 2*cutoff]
+       cutoff : simtk.unit.Quantity with units compatible with nanometers, optional, default = 0.9 nm
+          Nonbonded cutoff
+       
+       Examples
+       --------
+       
+       Create a default waterbox.
+       
+       >>> waterbox = WaterBox()
+       >>> [system, positions] = [waterbox.system, waterbox.positions]
+       
+       Control the cutoff.
+       
+       >>> waterbox = WaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+       
+       """
 
-    """
+       import simtk.openmm.app as app
+       
+       # Load forcefield for solvent model.
+       ff =  app.ForceField('tip3p.xml')
+       
+       # Create empty topology and coordinates.
+       top = app.Topology()
+       pos = units.Quantity((), units.angstroms)
+       
+       # Create new Modeller instance.
+       m = app.Modeller(top, pos)
+       
+       # Add solvent to specified box dimensions.
+       boxSize = units.Quantity(numpy.ones([3]) * box_edge/box_edge.unit, box_edge.unit)
+       m.addSolvent(ff, boxSize=boxSize)
+   
+       # Get new topology and coordinates.
+       newtop = m.getTopology()
+       newpos = m.getPositions()
+   
+       # Convert positions to numpy.
+       positions = units.Quantity(numpy.array(newpos / newpos.unit), newpos.unit)
+   
+       # Create OpenMM System.
+       nonbondedMethod = app.CutoffPeriodic
+       constraints = app.HBonds
+       system = ff.createSystem(newtop, nonbondedMethod=nonbondedMethod, nonbondedCutoff=cutoff, constraints=constraints, rigidWater=True, removeCMMotion=False)
 
-    def __init__(self, constrain=True, flexible=True, cutoff=None, nonbonded_method=None, filename=None, charges=True):
-        
-
-        # Construct filename
-        if filename is None:
-            filename = os.path.join(os.path.dirname(__file__), 'data', 'waterbox', 'watbox216.pdb')    
-        
-        # Partial atomic charges for water
-        massO  = 16.0 * units.amu
-        massH  =  1.0 * units.amu
-
-        # Partial atomic charges for TIP3P water
-        if charges:
-            qO  = -0.8340 * units.elementary_charge
-            qH  =  0.4170 * units.elementary_charge
-        else:
-            qO  = 0.0 * units.elementary_charge
-            qH  = 0.0 * units.elementary_charge        
-        
-        # Lennard-Jones parameters for oxygen-oxygen interactions
-        sigma   = 3.15061 * units.angstrom
-        epsilon = 0.6364  * units.kilojoule_per_mole
-
-        # Water bond and angle values
-        rOH   = 0.9572  * units.angstrom
-        aHOH  = 104.52  * units.degree
-
-        # Water bond and angle spring constants.
-        kOH   = 553.0 * units.kilocalories_per_mole / units.angstrom**2 # from AMBER parm96
-        kHOH  = 100.0 * units.kilocalories_per_mole / units.radian**2 # from AMBER parm96
-
-        # Distance between the two H atoms in water
-        rHH = 2*rOH*units.sin(aHOH/2.0)
-
-        def loadCoordsHOH(infile):
-            """
-            Load water positions from a PDB file.
-            
-            """
-            pdbData = []
-            atomNum = 0
-            resNum = 0
-            for line in infile:
-                if line.find('HETATM')==0 or line.find('ATOM  ')==0:
-                    resName=line[17:20]
-                    if resName in ['HOH', 'WAT', 'SOL']:
-                        atomNum+=1
-                        atomName=line[12:16].strip()
-                        if atomName in ['O', 'OW']:
-                            resNum+=1
-                        try:
-                            if atomName==pdbData[-1][1] or atomName==pdbData[-2][1]:
-                                raise Exception("bad water molecule near %s..." % line[:27])
-                        except IndexError:
-                            pass
-                        x = float(line[30:38])
-                        y = float(line[38:46])
-                        z = float(line[46:54])
-                        pdbData.append( (atomNum, atomName, resName, resNum, ((x, y, z) * units.angstrom) ) )
-                        
-            return pdbData
-
-        # Load waters from input pdb file
-        infile = open(filename, 'r')
-        pdbData = loadCoordsHOH(infile)
-        infile.close()
-
-        # Determine number of atoms.
-        natoms = len(pdbData)
-        
-        # Create water system, which will inlcude force field
-        # and general system parameters
-        system = mm.System()
-
-        # Create nonbonded, harmonic bond, and harmonic angle forces.
-        nb = mm.NonbondedForce()
-        bond = mm.HarmonicBondForce()
-        angle = mm.HarmonicAngleForce()
-
-        # Add water molecules to system
-        # Note that no bond forces are used. Bond lenths are rigid
-        count = 0
-        positions = units.Quantity(np.zeros([natoms,3], np.float32), units.nanometer)
-        for atomNum, atomName, resName, resNum, xyz in pdbData:
-            if atomName in ['O', 'OW']:
-                # Add an oxygen atom
-                system.addParticle(massO)
-                nb.addParticle(qO, sigma, epsilon)
-                lastOxygen = count
-            elif atomName in ['H1', 'H2', 'HW1', 'HW2']:            
-                # Add an hydrogen atom
-                system.addParticle(massH)
-                zero_chargeprod = 0.0 * units.elementary_charge**2
-                unit_sigma = 1.0 * units.angstroms
-                zero_epsilon = 0.0 * units.kilocalories_per_mole            
-                nb.addParticle(qH, unit_sigma, zero_epsilon)
-                if (count == lastOxygen+1):
-                    # For the last oxygen and hydrogen number 1:
-                    if constrain: system.addConstraint(lastOxygen, count, rOH)        #O-H1
-                    # Add harmonic bond force for this bond.
-                    bond.addBond(lastOxygen, count, rOH, kOH)
-                    # Exception: chargeProd=0.0, sigma=1.0, epsilon=0.0
-                    nb.addException(lastOxygen, count, zero_chargeprod, unit_sigma, zero_epsilon)   #O-H1
-                elif (count == lastOxygen+2):
-                    # For the last oxygen and hydrogen number 2:
-                    if constrain: system.addConstraint(lastOxygen, count, rOH)        #O-H2
-                    # Add harmonic bond force for this bond.
-                    bond.addBond(lastOxygen, count, rOH, kOH)
-                    # Exception: chargeProd=0.0, sigma=1.0, epsilon=0.0
-                    nb.addException(lastOxygen, count, zero_chargeprod, unit_sigma, zero_epsilon)   #O-H2
-
-                    # For hydrogen number 1 and hydrogen number 2
-                    if constrain: system.addConstraint(count-1, count, rHH)           #H1-H2
-                    # Add harmonic angle bend.
-                    angle.addAngle(count-1, lastOxygen, count, aHOH, kHOH)
-                    # Exception: chargeProd=0.0, sigma=1.0, epsilon=0.0
-                    nb.addException(count-1, count, zero_chargeprod, unit_sigma, zero_epsilon)      #H1-H2
-                else:
-                    s = "too many hydrogens:"
-                    s += " atomNum=%d, resNum=%d, resName=%s, atomName=%s" % (atomNum, resNum, resName, atomName)
-                    raise Exception(s)
-            else:
-                raise Exception("bad atom : %s" % atomName)
-            for k in range(3):
-                positions[count,k] = xyz[k]        
-            count += 1
-
-        # Determine box size from maximum extent.
-        box_extents = units.Quantity(np.zeros([3]), units.nanometers)
-        for k in range(3):
-            box_extents[k] = (positions[:,k] / units.nanometers).max() * units.nanometers - (positions[:,k] / units.nanometers).min() * units.nanometers
-        box_size = (box_extents / units.nanometers).max() * units.nanometers 
-        
-        # Set box vectors.
-        a = units.Quantity(np.zeros([3]), units.nanometers); a[0] = box_size
-        b = units.Quantity(np.zeros([3]), units.nanometers); b[1] = box_size
-        c = units.Quantity(np.zeros([3]), units.nanometers); c[2] = box_size
-        system.setDefaultPeriodicBoxVectors(a, b, c)
-
-        # Set nonbonded cutoff.
-        nb.setNonbondedMethod(mm.NonbondedForce.CutoffPeriodic)
-        if (nonbonded_method is not None):
-            nb.setNonbondedMethod(nonbonded_method)        
-        if (cutoff is None) or (cutoff >= box_size / 2.0):
-            cutoff = box_size / 2.0 * 0.999 # cutoff should be smaller than half the box length    
-        nb.setCutoffDistance(cutoff)
-
-        # Add force terms to system.
-        system.addForce(nb)
-        if flexible:
-            system.addForce(bond)
-            system.addForce(angle)
-
-        self.system, self.positions = system, positions
+       # Turn on switching function.
+       forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+       forces['NonbondedForce'].setUseSwitchingFunction(True)
+       forces['NonbondedForce'].setSwitchingDistance(cutoff - 0.5 * units.angstroms)
+       
+       self.system, self.positions = system, positions
 
 #=============================================================================================
 # Alanine dipeptide in vacuum.
@@ -1643,6 +1532,7 @@ class AlanineDipeptideVacuum(TestSystem):
         positions = inpcrd.getPositions(asNumpy=True)
 
         self.system, self.positions = system, positions
+
 #=============================================================================================
 # Alanine dipeptide in implicit solvent.
 #=============================================================================================
@@ -2051,3 +1941,11 @@ class CustomGBForceSystem(TestSystem):
 
         self.system, self.positions = system, positions
 
+    
+#=============================================================================================
+# MAIN AND TESTS
+#=============================================================================================
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod(verbose=True)
