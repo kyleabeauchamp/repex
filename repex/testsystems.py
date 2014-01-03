@@ -61,52 +61,10 @@ import simtk.unit as units
 import simtk.openmm.app as app
 
 from repex.utils import get_data_filename
+from repex.thermodynamics import ThermodynamicState
 
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA 
 
-#=============================================================================================
-# Thermodynamic state description
-#=============================================================================================
-
-class ThermodynamicState(object):
-    """
-    Data specifying a thermodynamic state obeying Boltzmann statistics.
-
-    EXAMPLES
-
-    Specify an NVT state for a water box at 298 K.
-
-    >>> import simtk.unit as u
-    >>> state = ThermodynamicState(temperature=298.0*u.kelvin)
-
-    Specify an NPT state at 298 K and 1 atm pressure.
-
-    >>> state = ThermodynamicState(temperature=298.0*u.kelvin, pressure=1.0*u.atmospheres)
-    
-    Note that the pressure is only relevant for periodic systems.
-
-    """
-    
-    def __init__(self, temperature=None, pressure=None):
-        """
-        Initialize the thermodynamic state.
-
-        OPTIONAL ARGUMENTS
-
-        system (simtk.openmm.System) - a System object describing the potential energy function for the system (default: None)
-        temperature (simtk.unit.Quantity compatible with 'kelvin') - the temperature for a system with constant temperature (default: None)
-        pressure (simtk.unit.Quantity compatible with 'atmospheres') - the pressure for constant-pressure systems (default: None)
-
-        mm (simtk.openmm API) - OpenMM API implementation to use
-        cache_context (boolean) - if True, will try to cache Context objects
-
-        """
-
-        # Initialize.
-        self.temperature = temperature
-        self.pressure = pressure
-
-        return
 
 #=============================================================================================
 # Abstract base class for test systems
@@ -317,7 +275,7 @@ class HarmonicOscillator(TestSystem):
     Compute the potential expectation and standard deviation
 
     >>> import simtk.unit as u
-    >>> thermodynamic_state = ThermodynamicState(temperature=298.0*u.kelvin)
+    >>> thermodynamic_state = ThermodynamicState(temperature=298.0*u.kelvin, system=system)
     >>> potential_mean = ho.get_potential_expectation(thermodynamic_state)
     >>> potential_stddev = ho.get_potential_standard_deviation(thermodynamic_state)
     
