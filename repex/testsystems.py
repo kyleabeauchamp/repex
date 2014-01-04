@@ -1387,7 +1387,7 @@ class WaterBox(TestSystem):
    Examples
    --------
    
-   Create a default waterbox.
+   Create a default (TIP3P) waterbox.
 
    >>> waterbox = WaterBox()
 
@@ -1395,9 +1395,13 @@ class WaterBox(TestSystem):
    
    >>> waterbox = WaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
 
+   Use a different water model.
+
+   >>> waterbox = WaterBox(model='tip4pew')
+
    """
 
-   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers):
+   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers, model='tip3p'):
        """
        Create a water box test system.
        
@@ -1408,6 +1412,8 @@ class WaterBox(TestSystem):
           Edge length for cubic box [should be greater than 2*cutoff]
        cutoff : simtk.unit.Quantity with units compatible with nanometers, optional, default = 0.9 nm
           Nonbonded cutoff
+       model : str, optional default = 'tip3p'
+          The name of the water model to use ['tip3p', 'tip4p', 'tip4pew', 'tip5p', 'spce']
        
        Examples
        --------
@@ -1421,12 +1427,23 @@ class WaterBox(TestSystem):
        
        >>> waterbox = WaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
        
+       Use a different water model.
+       
+       >>> waterbox = WaterBox(model='spce')
+
+       Use a five-site water model.
+       
+       >>> waterbox = WaterBox(model='tip5p')
        """
 
        import simtk.openmm.app as app
        
+       supported_models = ['tip3p', 'tip4pew', 'tip5p', 'spce']
+       if model not in supported_models:
+           raise Exception("Specified water model '%s' is not in list of supported models: %s" % (model, str(supported_models)))
+
        # Load forcefield for solvent model.
-       ff =  app.ForceField('tip3p.xml')
+       ff =  app.ForceField(model + '.xml')
        
        # Create empty topology and coordinates.
        top = app.Topology()
@@ -1437,7 +1454,7 @@ class WaterBox(TestSystem):
        
        # Add solvent to specified box dimensions.
        boxSize = units.Quantity(numpy.ones([3]) * box_edge/box_edge.unit, box_edge.unit)
-       m.addSolvent(ff, boxSize=boxSize)
+       m.addSolvent(ff, boxSize=boxSize, model=model)
    
        # Get new topology and coordinates.
        newtop = m.getTopology()
@@ -1457,6 +1474,94 @@ class WaterBox(TestSystem):
        forces['NonbondedForce'].setSwitchingDistance(cutoff - 0.5 * units.angstroms)
        
        self.system, self.positions = system, positions
+
+class FourSiteWaterBox(WaterBox):
+   """
+   Create a water box test system using a four-site water model (TIP4P-Ew).
+
+   Examples
+   --------
+   
+   Create a default waterbox of four-site waters.
+
+   >>> waterbox = FourSiteWaterBox()
+
+   Control the cutoff.
+   
+   >>> waterbox = FourSiteWaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+
+   """
+
+   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers):
+       """
+       Create a water box test systemm using a four-site water model (TIP4P-Ew).
+       
+       Parameters
+       ----------
+       
+       box_edge : simtk.unit.Quantity with units compatible with nanometers, optional, default = 2.5 nm
+          Edge length for cubic box [should be greater than 2*cutoff]
+       cutoff : simtk.unit.Quantity with units compatible with nanometers, optional, default = 0.9 nm
+          Nonbonded cutoff
+       
+       Examples
+       --------
+       
+       Create a default waterbox.
+       
+       >>> waterbox = FourSiteWaterBox()
+       >>> [system, positions] = [waterbox.system, waterbox.positions]
+       
+       Control the cutoff.
+       
+       >>> waterbox = FourSiteWaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+       
+       """
+       super(FourSiteWaterBox, self).__init__(box_edge=box_edge, cutoff=cutoff, model='tip4pew')
+
+class FiveSiteWaterBox(WaterBox):
+   """
+   Create a water box test system using a four-site water model (TIP5P).
+
+   Examples
+   --------
+   
+   Create a default waterbox of five-site waters.
+
+   >>> waterbox = FiveSiteWaterBox()
+
+   Control the cutoff.
+   
+   >>> waterbox = FiveSiteWaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+
+   """
+
+   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers):
+       """
+       Create a water box test systemm using a five-site water model (TIP5P).
+       
+       Parameters
+       ----------
+       
+       box_edge : simtk.unit.Quantity with units compatible with nanometers, optional, default = 2.5 nm
+          Edge length for cubic box [should be greater than 2*cutoff]
+       cutoff : simtk.unit.Quantity with units compatible with nanometers, optional, default = 0.9 nm
+          Nonbonded cutoff
+       
+       Examples
+       --------
+       
+       Create a default waterbox.
+       
+       >>> waterbox = FiveSiteWaterBox()
+       >>> [system, positions] = [waterbox.system, waterbox.positions]
+       
+       Control the cutoff.
+       
+       >>> waterbox = FiveSiteWaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+       
+       """
+       super(FiveSiteWaterBox, self).__init__(box_edge=box_edge, cutoff=cutoff, model='tip5p')
 
 #=============================================================================================
 # Alanine dipeptide in vacuum.
