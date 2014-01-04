@@ -188,8 +188,9 @@ if __name__ == "__main__":
     print 'Testing Reference platform...'
     doctest.testmod()    
 
-    # Make a list of all test system constructors.
-    systems = [ (cls.__name__, cls) for cls in testsystems.testsystem_classes ]
+    # Make a list of all test system classes.
+    testsystem_classes = testsystems.TestSystem.__subclasses__()
+    systems = [ (cls.__name__, cls) for cls in testsystem_classes ]
 
     # Compute energy error made on all test systems for other platforms.
     # Make a count of how often set tolerance is exceeded.
@@ -198,11 +199,12 @@ if __name__ == "__main__":
     print "%32s %16s          %16s          %16s          %16s" % ("platform", "potential", "error", "force mag", "rms error")    
     reference_platform = openmm.Platform.getPlatformByName("Reference")    
     for (name, constructor) in systems:
+        print "%s" % name
+
         testsystem = constructor()
         [system, positions] = [testsystem.system, testsystem.positions]
         [reference_potential, reference_force] = compute_potential_and_force(system, positions, reference_platform)
 
-        print "%s" % name
         test_success = True
         for platform_index in range(openmm.Platform.getNumPlatforms()):
             try:
