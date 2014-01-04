@@ -1475,6 +1475,94 @@ class WaterBox(TestSystem):
        
        self.system, self.positions = system, positions
 
+class FourSiteWaterBox(WaterBox):
+   """
+   Create a water box test system using a four-site water model (TIP4P-Ew).
+
+   Examples
+   --------
+   
+   Create a default waterbox of four-site waters.
+
+   >>> waterbox = FourSiteWaterBox()
+
+   Control the cutoff.
+   
+   >>> waterbox = FourSiteWaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+
+   """
+
+   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers):
+       """
+       Create a water box test systemm using a four-site water model (TIP4P-Ew).
+       
+       Parameters
+       ----------
+       
+       box_edge : simtk.unit.Quantity with units compatible with nanometers, optional, default = 2.5 nm
+          Edge length for cubic box [should be greater than 2*cutoff]
+       cutoff : simtk.unit.Quantity with units compatible with nanometers, optional, default = 0.9 nm
+          Nonbonded cutoff
+       
+       Examples
+       --------
+       
+       Create a default waterbox.
+       
+       >>> waterbox = FourSiteWaterBox()
+       >>> [system, positions] = [waterbox.system, waterbox.positions]
+       
+       Control the cutoff.
+       
+       >>> waterbox = FourSiteWaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+       
+       """
+       super(FourSiteWaterBox, self).__init__(box_edge=box_edge, cutoff=cutoff, model='tip4pew')
+
+class FiveSiteWaterBox(WaterBox):
+   """
+   Create a water box test system using a four-site water model (TIP5P).
+
+   Examples
+   --------
+   
+   Create a default waterbox of five-site waters.
+
+   >>> waterbox = FiveSiteWaterBox()
+
+   Control the cutoff.
+   
+   >>> waterbox = FiveSiteWaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+
+   """
+
+   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers):
+       """
+       Create a water box test systemm using a five-site water model (TIP5P).
+       
+       Parameters
+       ----------
+       
+       box_edge : simtk.unit.Quantity with units compatible with nanometers, optional, default = 2.5 nm
+          Edge length for cubic box [should be greater than 2*cutoff]
+       cutoff : simtk.unit.Quantity with units compatible with nanometers, optional, default = 0.9 nm
+          Nonbonded cutoff
+       
+       Examples
+       --------
+       
+       Create a default waterbox.
+       
+       >>> waterbox = FiveSiteWaterBox()
+       >>> [system, positions] = [waterbox.system, waterbox.positions]
+       
+       Control the cutoff.
+       
+       >>> waterbox = FiveSiteWaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+       
+       """
+       super(FiveSiteWaterBox, self).__init__(box_edge=box_edge, cutoff=cutoff, model='tip5p')
+
 #=============================================================================================
 # Alanine dipeptide in vacuum.
 #=============================================================================================
