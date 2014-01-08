@@ -37,7 +37,32 @@ class ParallelTempering(ReplicaExchange):
     range) is used to automatically build a set of ThermodynamicState objects for replica-exchange.  Efficiency improvements
     make use of the fact that the reduced potentials are linear in inverse temperature.
     
+    Notes
+    -----
+    
+    For creating a new ParallelTempering simulation, we recommend the use
+    of the `create_repex` function, which provides a convenient way to 
+    create PT simulations across a temperature range. 
+    
     """
+
+    def __init__(self, states, coordinates, database=None, mpicomm=None, **kwargs):
+        self._check_self_consistency(states)
+        super(ParallelTempering, self).__init__(states, coordinates, database=database, mpicomm=mpicomm, **kwargs)
+
+    def _check_self_consistency(self, states):
+        """Checks that each state is identical except for the temperature, as required for ParallelTempering."""
+        
+        for s0 in states:
+            for s1 in states:
+                if s0.pressure != s1.pressure:
+                    raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different pressures!"))
+
+        for s0 in states:
+            for s1 in states:
+                if s0.system.__getstate__() != s1.system.__getstate__():
+                    raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different systems!"))
+
 
     def _compute_energies(self):
         """Compute reduced potentials of all replicas at all states (temperatures).
