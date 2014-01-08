@@ -41,7 +41,7 @@ class HamiltonianExchange(ReplicaExchange):
         super(HamiltonianExchange, self).__init__(states, coordinates, database=database, mpicomm=mpicomm, **kwargs)
 
     def _check_self_consistency(self, states):
-        """Checks that each state is identical except for the temperature, as required for HamiltonianExchange."""
+        """Checks that each state has the same temperature and pressure, as required for HamiltonianExchange."""
         
         for s0 in states:
             for s1 in states:
