@@ -15,6 +15,7 @@ from thermodynamics import ThermodynamicState
 from constants import kB
 from utils import time_and_print, process_kwargs, fix_coordinates
 from mcmc import MCMCSamplerState
+import mcmc
 import citations
 import netcdf_io
 from version import version as __version__
@@ -272,41 +273,15 @@ class ReplicaExchange(object):
         # Retrieve state.
         state_index = self.replica_states[replica_index] # index of thermodynamic state that current replica is assigned to
         thermodynamic_state = self.thermodynamic_states[state_index] # thermodynamic state
-
-        # Retrieve integrator and context from thermodynamic state.
-        integrator = thermodynamic_state._integrator
-        context = thermodynamic_state._context
+        sampler_state = self.sampler_states[state_index]
         
-        #  TO DO: create a nice helper function that sets all the context parameters from the MCMCSamplerState and ThermodynamicState
-
-        coordinates = self.sampler_states[replica_index].positions
-        context.setPositions(coordinates)
-        setpositions_end_time = time.time()
-
-        box_vectors = self.sampler_states[replica_index].box_vectors
-        context.setPeriodicBoxVectors(box_vectors[0], box_vectors[1], box_vectors[2])
-
-        context.setVelocitiesToTemperature(thermodynamic_state.temperature)
-        setvelocities_end_time = time.time()
-        # Run dynamics.
-        integrator.step(self.nsteps_per_iteration)
-        integrator_end_time = time.time() 
-        # Store final coordinates
-        getstate_start_time = time.time()
-        openmm_state = context.getState(getPositions=True)
-        getstate_end_time = time.time()
+        move = mcmc.LangevinDynamicsMove(nsteps=self.nsteps_per_iteration, timestep=self.timestep, collision_rate=self.collision_rate)
+        new_sampler_state = move.apply(thermodynamic_state, sampler_state)
         
-        self.sampler_states[replica_index].positions = openmm_state.getPositions(asNumpy=True)
-        self.sampler_states[replica_index].box_vectors = openmm_state.getPeriodicBoxVectors(asNumpy=True)        
-
+        self.sampler_states[state_index] = new_sampler_state
+        
         end_time = time.time()
         elapsed_time = end_time - start_time
-        positions_elapsed_time = setpositions_end_time - start_time
-        velocities_elapsed_time = setvelocities_end_time - setpositions_end_time
-        integrator_elapsed_time = integrator_end_time - setvelocities_end_time
-        getstate_elapsed_time = getstate_end_time - integrator_end_time
-        logger.debug("Replica %d/%d: integrator elapsed time %.3f s (positions %.3f s | velocities %.3f s | integrate+getstate %.3f s)." % (replica_index, self.n_replicas, elapsed_time, positions_elapsed_time, velocities_elapsed_time, integrator_elapsed_time+getstate_elapsed_time))
-
         return elapsed_time
 
     def _propagate_replicas_mpi(self):
