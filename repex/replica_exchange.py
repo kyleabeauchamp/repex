@@ -160,19 +160,18 @@ class ReplicaExchange(object):
         """Allocate the in-memory numpy arrays."""
   
         # Allocate storage.
-        #self.replica_coordinates = list() # replica_coordinates[i] is the configuration currently held in replica i
-        #self.replica_box_vectors = list() # replica_box_vectors[i] is the set of box vectors currently held in replica i  
         self.replica_states     = np.zeros([self.n_states], np.int32) # replica_states[i] is the state that replica i is currently at
         self.u_kl               = np.zeros([self.n_states, self.n_states], np.float32)        
         self.swap_Pij_accepted  = np.zeros([self.n_states, self.n_states], np.float32)
         self.Nij_proposed       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
         self.Nij_accepted       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
 
-        #self.replica_coordinates = [ copy.deepcopy(self.provided_coordinates[replica_index % len(self.provided_coordinates)]) for replica_index in range(self.n_states) ]
         #  use sampler state objects?
 
-        # Assign default box vectors.
-        # The following will be part of of the sampler states as well.
+        #  Assign default box vectors.
+        #  ***************************************
+        #  To do: the following code has not yet been implemented and may require changes to the SamplerState object!
+        #  ***************************************
         """
         self.replica_box_vectors = list()
         for state in self.thermodynamic_states:
@@ -283,12 +282,10 @@ class ReplicaExchange(object):
         
         #  TO DO: create a nice helper function that sets all the context parameters from the MCMCSamplerState and ThermodynamicState
 
-        #coordinates = self.replica_coordinates[replica_index]
         coordinates = self.sampler_states[replica_index].positions
         context.setPositions(coordinates)
         setpositions_end_time = time.time()
 
-        #box_vectors = self.replica_box_vectors[replica_index]
         box_vectors = self.sampler_states[replica_index].box_vectors
         context.setPeriodicBoxVectors(box_vectors[0], box_vectors[1], box_vectors[2])
 
@@ -303,11 +300,7 @@ class ReplicaExchange(object):
         getstate_end_time = time.time()
         
         self.sampler_states[replica_index].positions = openmm_state.getPositions(asNumpy=True)
-        self.sampler_states[replica_index].box_vectors = openmm_state.getPeriodicBoxVectors(asNumpy=True)
-        
-        #self.replica_coordinates[replica_index] = openmm_state.getPositions(asNumpy=True)
-        # Store box vectors.
-        #self.replica_box_vectors[replica_index] = openmm_state.getPeriodicBoxVectors(asNumpy=True)
+        self.sampler_states[replica_index].box_vectors = openmm_state.getPeriodicBoxVectors(asNumpy=True)        
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -364,14 +357,10 @@ class ReplicaExchange(object):
         replica_indices_gather = self.mpicomm.allgather(replica_indices)
         
         sampler_states_gather = self.mpicomm.allgather([self.sampler_states[replica_index] for replica_index in replica_indices ])
-        #replica_coordinates_gather = self.mpicomm.allgather([ self.replica_coordinates[replica_index] for replica_index in replica_indices ])
-        #replica_box_vectors_gather = self.mpicomm.allgather([ self.replica_box_vectors[replica_index] for replica_index in replica_indices ])
         for (source, replica_indices) in enumerate(replica_indices_gather):
             for (index, replica_index) in enumerate(replica_indices):
                 self.sampler_states[replica_index].positions = sampler_states_gather[source][index].positions
                 self.sampler_states[replica_index].box_vectors = sampler_states_gather[source][index].box_vectors
-                #self.replica_coordinates[replica_index] = replica_coordinates_gather[source][index]
-                #self.replica_box_vectors[replica_index] = replica_box_vectors_gather[source][index]
 
         end_time = time.time()
         logger.debug("Synchronizing configurations and box vectors: elapsed time %.3f s" % (end_time - start_time))
@@ -412,14 +401,12 @@ class ReplicaExchange(object):
         coordinates = self.sampler_states[replica_index].positions
         context.setPositions(coordinates)
         # Set box vectors.
-        #box_vectors = self.replica_box_vectors[replica_index]
         box_vectors = self.sampler_states[replica_index].box_vectors
         context.setPeriodicBoxVectors(box_vectors[0], box_vectors[1], box_vectors[2])
         # Minimize energy.
         minimized_coordinates = mm.LocalEnergyMinimizer.minimize(context, self.minimize_tolerance, self.minimize_maxIterations)
         # Store final coordinates
         openmm_state = context.getState(getPositions=True)
-        #self.replica_coordinates[replica_index] = openmm_state.getPositions(asNumpy=True)
         self.sampler_states[replica_index].positions = openmm_state.getPositions(asNumpy=True)
         # Clean up.
         del integrator, context
@@ -465,7 +452,6 @@ class ReplicaExchange(object):
         # Compute energies for this node's share of states.
         for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
             for replica_index in range(self.n_states):
-                #self.u_kl[replica_index,state_index] = self.thermodynamic_states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
                 self.u_kl[replica_index,state_index] = self.thermodynamic_states[state_index].reduced_potential(self.sampler_states[replica_index].positions, box_vectors=self.sampler_states[replica_index].box_vectors, platform=self.platform)
 
         # Send final energies to all nodes.
@@ -795,8 +781,6 @@ class ReplicaExchange(object):
         if not self.mpicomm.rank == 0:
             return
 
-        #coordinates = np.array([self.replica_coordinates[replica_index] / units.nanometers for replica_index in range(self.n_states)])
-        #box_vectors = np.array([self.replica_box_vectors[replica_index] / units.nanometers for replica_index in range(self.n_states)])
         coordinates = np.array([self.sampler_states[replica_index].positions / units.nanometers for replica_index in range(self.n_states)])
         box_vectors = np.array([self.sampler_states[replica_index].box_vectors / units.nanometers for replica_index in range(self.n_states)])
         
