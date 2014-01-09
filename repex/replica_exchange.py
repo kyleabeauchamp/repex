@@ -170,16 +170,15 @@ class ReplicaExchange(object):
         #  ***************************************
         #  To do: the following code has not yet been implemented and may require changes to the SamplerState object!
         #  ***************************************
-        """
-        self.replica_box_vectors = list()
-        for state in self.thermodynamic_states:
-            [a,b,c] = state.system.getDefaultPeriodicBoxVectors()
-            box_vectors = units.Quantity(np.zeros([3,3], np.float32), units.nanometers)
-            box_vectors[0,:] = a
-            box_vectors[1,:] = b
-            box_vectors[2,:] = c
-            self.replica_box_vectors.append(box_vectors)
-        """
+        
+        #self.replica_box_vectors = list()
+        #for state in self.thermodynamic_states:
+        #    [a,b,c] = state.system.getDefaultPeriodicBoxVectors()
+        #    box_vectors = units.Quantity(np.zeros([3,3], np.float32), units.nanometers)
+        #    box_vectors[0,:] = a
+        #    box_vectors[1,:] = b
+        #    box_vectors[2,:] = c
+        #    self.replica_box_vectors.append(box_vectors)
     
 
     def _initialize(self):
