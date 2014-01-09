@@ -14,6 +14,7 @@ import simtk.unit as units
 from thermodynamics import ThermodynamicState
 from constants import kB
 from utils import time_and_print, process_kwargs, fix_coordinates
+from mcmc import MCMCSamplerState
 import citations
 import netcdf_io
 from version import version as __version__
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ReplicaExchange(object):
 
-    def __init__(self, states, coordinates, database=None, mpicomm=None, **kwargs):
+    def __init__(self, thermodynamic_states, coordinates, database=None, mpicomm=None, **kwargs):
         """
         """
 
@@ -41,18 +42,17 @@ class ReplicaExchange(object):
 
         self.database = database
 
-        self.states = states
-        #self.provided_coordinates = fix_coordinates(coordinates)
+        self.thermodynamic_states = thermodynamic_states
         self.provided_coordinates = coordinates
         self.options = options
                 
         self.platform = kwargs.get("platform")  # For convenience
         
-        self.n_replicas = len(self.states)  # Determine number of replicas from the number of specified thermodynamic states.
+        self.n_replicas = len(self.thermodynamic_states)  # Determine number of replicas from the number of specified thermodynamic states.
 
         # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
-        for state in self.states:
-            if not state.is_compatible_with(self.states[0]):
+        for state in self.thermodynamic_states:
+            if not state.is_compatible_with(self.thermodynamic_states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
                 
         self.set_attributes()
@@ -129,7 +129,7 @@ class ReplicaExchange(object):
         if self.platform is not None:
             return
 
-        state = self.states[0]
+        state = self.thermodynamic_states[0]
         context = mm.Context(state.system, mm.VerletIntegrator(self.timestep))
         self.platform = context.getPlatform()
         del context
@@ -142,7 +142,7 @@ class ReplicaExchange(object):
 
         # Serial version.
         initial_time = time.time()
-        for (state_index, state) in enumerate(self.states):  
+        for (state_index, state) in enumerate(self.thermodynamic_states):  
             logger.debug("Creating Context for state %d..." % state_index)
             state._integrator = mm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)
             state._integrator.setRandomNumberSeed(seed)
@@ -172,7 +172,7 @@ class ReplicaExchange(object):
 
         # Assign default box vectors.
         self.replica_box_vectors = list()
-        for state in self.states:
+        for state in self.thermodynamic_states:
             [a,b,c] = state.system.getDefaultPeriodicBoxVectors()
             box_vectors = units.Quantity(np.zeros([3,3], np.float32), units.nanometers)
             box_vectors[0,:] = a
@@ -198,12 +198,12 @@ class ReplicaExchange(object):
         citations.display_citations(self.replica_mixing_scheme, self.online_analysis)
 
         # Determine number of alchemical states.
-        self.n_states = len(self.states)
+        self.n_states = len(self.thermodynamic_states)
 
         self.cache_contexts()
 
         # Determine number of atoms in systems.
-        self.n_atoms = self.states[0].system.getNumParticles()
+        self.n_atoms = self.thermodynamic_states[0].system.getNumParticles()
   
         self.allocate_arrays()
         
@@ -271,7 +271,7 @@ class ReplicaExchange(object):
 
         # Retrieve state.
         state_index = self.replica_states[replica_index] # index of thermodynamic state that current replica is assigned to
-        state = self.states[state_index] # thermodynamic state
+        state = self.thermodynamic_states[state_index] # thermodynamic state
 
         # Retrieve integrator and context from thermodynamic state.
         integrator = state._integrator
@@ -387,7 +387,7 @@ class ReplicaExchange(object):
         """
         # Retrieve thermodynamic state.
         state_index = self.replica_states[replica_index] # index of thermodynamic state that current replica is assigned to
-        state = self.states[state_index] # thermodynamic state
+        state = self.thermodynamic_states[state_index] # thermodynamic state
         # Retrieve integrator and context.
         # TODO: This needs to be adapted in case Integrator and Context objects are not cached.
         integrator = state._integrator
@@ -447,7 +447,7 @@ class ReplicaExchange(object):
         # Compute energies for this node's share of states.
         for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
             for replica_index in range(self.n_states):
-                self.u_kl[replica_index,state_index] = self.states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
+                self.u_kl[replica_index,state_index] = self.thermodynamic_states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
 
         # Send final energies to all nodes.
         energies_gather = self.mpicomm.allgather(self.u_kl[:,self.mpicomm.rank:self.n_states:self.mpicomm.size])
@@ -783,7 +783,7 @@ class ReplicaExchange(object):
         for replica_index in range(self.n_states):
             v = self.replica_box_vectors[replica_index]
             state_index = self.replica_states[replica_index]
-            state = self.states[state_index]
+            state = self.thermodynamic_states[state_index]
             volumes.append(state._volume(v) / (units.nanometers**3))
         
         volumes = np.array(volumes)

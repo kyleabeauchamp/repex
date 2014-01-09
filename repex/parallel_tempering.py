@@ -46,20 +46,20 @@ class ParallelTempering(ReplicaExchange):
     
     """
 
-    def __init__(self, states, coordinates, database=None, mpicomm=None, **kwargs):
-        self._check_self_consistency(states)
-        super(ParallelTempering, self).__init__(states, coordinates, database=database, mpicomm=mpicomm, **kwargs)
+    def __init__(self, thermodynamic_states, coordinates, database=None, mpicomm=None, **kwargs):
+        self._check_self_consistency(thermodynamic_states)
+        super(ParallelTempering, self).__init__(thermodynamic_states, coordinates, database=database, mpicomm=mpicomm, **kwargs)
 
-    def _check_self_consistency(self, states):
+    def _check_self_consistency(self, thermodynamic_states):
         """Checks that each state is identical except for the temperature, as required for ParallelTempering."""
         
-        for s0 in states:
-            for s1 in states:
+        for s0 in thermodynamic_states:
+            for s1 in thermodynamic_states:
                 if s0.pressure != s1.pressure:
                     raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different pressures!"))
 
-        for s0 in states:
-            for s1 in states:
+        for s0 in thermodynamic_states:
+            for s1 in thermodynamic_states:
                 if s0.system.__getstate__() != s1.system.__getstate__():
                     raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different systems!"))
 
@@ -77,64 +77,36 @@ class ParallelTempering(ReplicaExchange):
         start_time = time.time()
         logger.debug("Computing energies...")
 
-        if self.mpicomm:
-            # MPI implementation
 
-            # NOTE: This version incurs the overhead of context creation/deletion.
-            # TODO: Use cached contexts instead.
-            
-            # Create an integrator and context.
-            state = self.states[0]
-            integrator = mm.VerletIntegrator(self.timestep)
-            context = mm.Context(state.system, integrator, self.platform)
-
-            for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
-                # Set coordinates.
-                context.setPositions(self.replica_coordinates[replica_index])
-                # Compute potential energy.
-                openmm_state = context.getState(getEnergy=True)            
-                potential_energy = openmm_state.getPotentialEnergy()           
-                # Compute energies at this state for all replicas.
-                for state_index in range(self.n_states):
-                    # Compute reduced potential
-                    beta = 1.0 / (kB * self.states[state_index].temperature)
-                    self.u_kl[replica_index,state_index] = beta * potential_energy
-
-            # Gather energies.
-            energies_gather = self.mpicomm.allgather(self.u_kl[self.mpicomm.rank:self.n_states:self.mpicomm.size,:])
-            for replica_index in range(self.n_states):
-                source = replica_index % self.mpicomm.size # node with trajectory data
-                index = replica_index // self.mpicomm.size # index within trajectory batch
-                self.u_kl[replica_index,:] = energies_gather[source][index]
-
-            # Clean up.
-            del context, integrator
-                
-        else:
-            # Serial implementation.
-            # NOTE: This version incurs the overhead of context creation/deletion.
-            # TODO: Use cached contexts instead.
-
-            # Create an integrator and context.
-            state = self.states[0]
-            integrator = mm.VerletIntegrator(self.timestep)
-            context = mm.Context(state.system, integrator, self.platform)
+        # NOTE: This version incurs the overhead of context creation/deletion.
+        # TODO: Use cached contexts instead.
         
-            # Compute reduced potentials for all configurations in all states.
-            for replica_index in range(self.n_states):
-                # Set coordinates.
-                context.setPositions(self.replica_coordinates[replica_index])
-                # Compute potential energy.
-                openmm_state = context.getState(getEnergy=True)            
-                potential_energy = openmm_state.getPotentialEnergy()           
-                # Compute energies at this state for all replicas.
-                for state_index in range(self.n_states):
-                    # Compute reduced potential
-                    beta = 1.0 / (kB * self.states[state_index].temperature)
-                    self.u_kl[replica_index,state_index] = beta * potential_energy
+        # Create an integrator and context.
+        thermodynamic_state = self.thermodynamic_states[0]
+        integrator = mm.VerletIntegrator(self.timestep)
+        context = mm.Context(thermodynamic_state.system, integrator, self.platform)
 
-            # Clean up.
-            del context, integrator
+        for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
+            # Set coordinates.
+            context.setPositions(self.replica_coordinates[replica_index])
+            # Compute potential energy.
+            openmm_state = context.getState(getEnergy=True)            
+            potential_energy = openmm_state.getPotentialEnergy()           
+            # Compute energies at this state for all replicas.
+            for state_index in range(self.n_states):
+                # Compute reduced potential
+                beta = 1.0 / (kB * self.thermodynamic_states[state_index].temperature)
+                self.u_kl[replica_index,state_index] = beta * potential_energy
+
+        # Gather energies.
+        energies_gather = self.mpicomm.allgather(self.u_kl[self.mpicomm.rank:self.n_states:self.mpicomm.size,:])
+        for replica_index in range(self.n_states):
+            source = replica_index % self.mpicomm.size # node with trajectory data
+            index = replica_index // self.mpicomm.size # index within trajectory batch
+            self.u_kl[replica_index,:] = energies_gather[source][index]
+
+        # Clean up.
+        del context, integrator
 
         end_time = time.time()
         elapsed_time = end_time - start_time
