@@ -18,6 +18,7 @@ import netCDF4 as netcdf # netcdf4-python is used in place of scipy.io.netcdf fo
 from thermodynamics import ThermodynamicState
 from replica_exchange import ReplicaExchange
 import netcdf_io
+from mcmc import MCMCSamplerState
 
 import logging
 logger = logging.getLogger(__name__)
@@ -46,9 +47,9 @@ class ParallelTempering(ReplicaExchange):
     
     """
 
-    def __init__(self, thermodynamic_states, coordinates, database=None, mpicomm=None, **kwargs):
+    def __init__(self, thermodynamic_states, sampler_states, database=None, mpicomm=None, **kwargs):
         self._check_self_consistency(thermodynamic_states)
-        super(ParallelTempering, self).__init__(thermodynamic_states, coordinates, database=database, mpicomm=mpicomm, **kwargs)
+        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states, database=database, mpicomm=mpicomm, **kwargs)
 
     def _check_self_consistency(self, thermodynamic_states):
         """Checks that each state is identical except for the temperature, as required for ParallelTempering."""
@@ -88,7 +89,7 @@ class ParallelTempering(ReplicaExchange):
 
         for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
             # Set coordinates.
-            context.setPositions(self.replica_coordinates[replica_index])
+            context.setPositions(self.sampler_states[replica_index].positions)
             # Compute potential energy.
             openmm_state = context.getState(getEnergy=True)            
             potential_energy = openmm_state.getPotentialEnergy()           
@@ -168,7 +169,9 @@ class ParallelTempering(ReplicaExchange):
         else:
             database = None
         
-        repex = cls(thermodynamic_states, coordinates, database, mpicomm=mpicomm, **kwargs)
+        
+        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
         # Override title.
         repex.title = 'Parallel tempering simulation created using ParallelTempering class of repex.py on %s' % time.asctime(time.localtime())        
 

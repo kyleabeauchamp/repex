@@ -36,9 +36,9 @@ class HamiltonianExchange(ReplicaExchange):
     
     """
 
-    def __init__(self, thermodynamic_states, coordinates, database=None, mpicomm=None, **kwargs):
+    def __init__(self, thermodynamic_states, sampler_states, database=None, mpicomm=None, **kwargs):
         self._check_self_consistency(thermodynamic_states)
-        super(HamiltonianExchange, self).__init__(thermodynamic_states, coordinates, database=database, mpicomm=mpicomm, **kwargs)
+        super(HamiltonianExchange, self).__init__(thermodynamic_states, sampler_states, database=database, mpicomm=mpicomm, **kwargs)
 
     def _check_self_consistency(self, thermodynamic_states):
         """Checks that each state has the same temperature and pressure, as required for HamiltonianExchange."""
