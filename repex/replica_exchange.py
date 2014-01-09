@@ -166,8 +166,6 @@ class ReplicaExchange(object):
         self.Nij_proposed       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
         self.Nij_accepted       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
 
-        #  use sampler state objects?
-
         #  Assign default box vectors.
         #  ***************************************
         #  To do: the following code has not yet been implemented and may require changes to the SamplerState object!
