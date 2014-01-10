@@ -124,17 +124,6 @@ class ReplicaExchange(object):
         # Clean up and close storage files.
         self._finalize()
 
-    def get_platform(self):
-        """THIS IS A HACK TO GET A DEFAULT PLATFORM."""
-
-        if self.platform is not None:
-            return
-
-        state = self.thermodynamic_states[0]
-        context = mm.Context(state.system, mm.VerletIntegrator(self.timestep))
-        self.platform = context.getPlatform()
-        del context
-
 
     def allocate_arrays(self):
         """Allocate the in-memory numpy arrays."""
@@ -332,16 +321,10 @@ class ReplicaExchange(object):
         ns_per_day = self.timestep * self.nsteps_per_iteration / time_per_replica * 24*60*60 / units.nanoseconds
         logger.debug("Time to propagate all replicas: %.3f s (%.3f per replica, %.3f ns/day)." % (elapsed_time, time_per_replica, ns_per_day))
 
-    def _minimize_replica(self, replica_index):
-        """
-        Minimize the specified replica.
-
-        """
-        self.sampler_states[replica_index].minimize()
 
     def _minimize_all_replicas(self):
         for replica_index in range(self.n_states):
-            self._minimize_replica(replica_index)
+            self.sampler_states[replica_index].minimize()
             
     def _minimize_and_equilibrate(self):
         """
