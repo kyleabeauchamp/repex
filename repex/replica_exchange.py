@@ -135,27 +135,6 @@ class ReplicaExchange(object):
         self.platform = context.getPlatform()
         del context
 
-    def cache_contexts(self):
-        # Create cached Context objects.
-        logger.debug("Creating and caching Context objects...")
-        MAX_SEED = (1<<31) - 1 # maximum seed value (max size of signed C long)
-        seed = int(np.random.randint(MAX_SEED)) # TODO: Is this the right maximum value to use?
-
-        # Serial version.
-        initial_time = time.time()
-        for (state_index, state) in enumerate(self.thermodynamic_states):  
-            logger.debug("Creating Context for state %d..." % state_index)
-            state._integrator = mm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)
-            state._integrator.setRandomNumberSeed(seed)
-            initial_context_time = time.time() # DEBUG
-            if self.platform:
-                state._context = mm.Context(state.system, state._integrator, self.platform)
-            else:
-                state._context = mm.Context(state.system, state._integrator)
-            logger.debug("Context creation took %.3f s" % (time.time() - initial_context_time))
-        final_time = time.time()
-        elapsed_time = final_time - initial_time
-        logger.debug("%.3f s elapsed." % elapsed_time)
 
     def allocate_arrays(self):
         """Allocate the in-memory numpy arrays."""
@@ -200,8 +179,6 @@ class ReplicaExchange(object):
 
         # Determine number of alchemical states.
         self.n_states = len(self.thermodynamic_states)
-
-        self.cache_contexts()
 
         # Determine number of atoms in systems.
         self.n_atoms = self.thermodynamic_states[0].system.getNumParticles()
@@ -254,9 +231,7 @@ class ReplicaExchange(object):
         self.database.close()
         
     def _propagate_replica(self, replica_index):
-        """
-        Propagate the replica corresponding to the specified replica index.
-        Caching is used.
+        """Propagate the replica corresponding to the specified replica index.
 
         ARGUMENTS
 
@@ -362,26 +337,7 @@ class ReplicaExchange(object):
         Minimize the specified replica.
 
         """
-        # Retrieve thermodynamic state.
-        state_index = self.replica_states[replica_index] # index of thermodynamic state that current replica is assigned to
-        thermodynamic_state = self.thermodynamic_states[state_index] # thermodynamic state
-        # Retrieve integrator and context.
-        # TODO: This needs to be adapted in case Integrator and Context objects are not cached.
-        integrator = thermodynamic_state._integrator
-        context = thermodynamic_state._context
-        # Set coordinates.
-        coordinates = self.sampler_states[replica_index].positions
-        context.setPositions(coordinates)
-        # Set box vectors.
-        box_vectors = self.sampler_states[replica_index].box_vectors
-        context.setPeriodicBoxVectors(box_vectors[0], box_vectors[1], box_vectors[2])
-        # Minimize energy.
-        minimized_coordinates = mm.LocalEnergyMinimizer.minimize(context, self.minimize_tolerance, self.minimize_maxIterations)
-        # Store final coordinates
-        openmm_state = context.getState(getPositions=True)
-        self.sampler_states[replica_index].positions = openmm_state.getPositions(asNumpy=True)
-        # Clean up.
-        del integrator, context
+        self.sampler_states[replica_index].minimize()
 
     def _minimize_all_replicas(self):
         for replica_index in range(self.n_states):

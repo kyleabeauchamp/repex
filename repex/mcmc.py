@@ -370,7 +370,7 @@ class MCMCSamplerState(object):
         >>> # Create a sampler state.
         >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
         >>> # Minimize
-        >>> sampler_state = sampler_state.minimize()
+        >>> sampler_state.minimize()
 
         """
 
