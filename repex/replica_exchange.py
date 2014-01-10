@@ -733,11 +733,9 @@ class ReplicaExchange(object):
 
         abort = False
 
-        # Check positions.
+        # Check sampler state (positions and generalized coordinates).
         for replica_index in range(self.n_replicas):
-            coordinates = self.sampler_states[replica_index].positions
-            x = coordinates / units.nanometers
-            if np.any(np.isnan(x)):
+            if self.sampler_states[replica_index].has_nan():
                 logger.warn("nan encountered in replica %d coordinates." % replica_index)
                 abort = True
 

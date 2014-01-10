@@ -79,10 +79,10 @@ TODO
 
 import os
 import math
-import numpy
 import copy
 import time
 
+import numpy as np
 import numpy.random
 
 import simtk
@@ -97,7 +97,7 @@ from abc import abstractmethod
 # MODULE CONSTANTS
 #=============================================================================================
 
-_RANDOM_SEED_MAX = numpy.iinfo(numpy.int32).max # maximum random number seed value
+_RANDOM_SEED_MAX = np.iinfo(np.int32).max # maximum random number seed value
 
 #=============================================================================================
 # MCMC sampler state
@@ -382,6 +382,22 @@ class MCMCSamplerState(object):
         self.total_energy = sampler_state.total_energy
         return
 
+    def has_nan(self):
+        """Return True if any of the generalized coordinates are nan.
+        
+        Notes
+        -----
+        
+        Currently checks only the positions.
+        """
+        x = self.positions / u.nanometers
+        
+        if np.any(np.isnan(x)):
+            return True
+        else:
+            return False
+
+
 #=============================================================================================
 # Monte Carlo Move abstract base class
 #=============================================================================================
@@ -576,9 +592,9 @@ class MCMCSampler(object):
         elif type(self.move_set) == dict:
             # Random moves.
             moves = self.move_set.keys()
-            weights = numpy.array([self.move_set[move] for move in moves])
+            weights = np.array([self.move_set[move] for move in moves])
             weights /= weights.sum() # normalize
-            move_sequence = numpy.random.choice(moves, size=niterations, p=weights)
+            move_sequence = np.random.choice(moves, size=niterations, p=weights)
         
         # Apply move sequence.
         for move in move_sequence:
@@ -736,7 +752,7 @@ class LangevinDynamicsMove(MCMCMove):
         integrator = mm.LangevinIntegrator(thermodynamic_state.temperature, self.collision_rate, self.timestep)
 
         # Random number seed.
-        seed = numpy.random.randint(_RANDOM_SEED_MAX)
+        seed = np.random.randint(_RANDOM_SEED_MAX)
         integrator.setRandomNumberSeed(seed)
 
         # Create context.
@@ -958,7 +974,7 @@ class GHMCMove(MCMCMove):
         integrator = integrators.GHMCIntegrator(temperature=thermodynamic_state.temperature, collision_rate=self.collision_rate, timestep=self.timestep)
 
         # Random number seed.
-        seed = numpy.random.randint(_RANDOM_SEED_MAX)
+        seed = np.random.randint(_RANDOM_SEED_MAX)
         integrator.setRandomNumberSeed(seed)
 
         # Create context.
@@ -1104,7 +1120,7 @@ class HMCMove(MCMCMove):
         integrator = integrators.HMCIntegrator(temperature=thermodynamic_state.temperature, timestep=self.timestep, nsteps=self.nsteps)
 
         # Random number seed.
-        seed = numpy.random.randint(_RANDOM_SEED_MAX)
+        seed = np.random.randint(_RANDOM_SEED_MAX)
         integrator.setRandomNumberSeed(seed)
 
         # Create context.
@@ -1252,7 +1268,7 @@ class MonteCarloBarostatMove(MCMCMove):
         integrator = integrators.DummyIntegrator()
 
         # Random number seed.
-        seed = numpy.random.randint(_RANDOM_SEED_MAX)
+        seed = np.random.randint(_RANDOM_SEED_MAX)
         force.setRandomNumberSeed(seed)
 
         # Create context.
