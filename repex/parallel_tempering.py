@@ -77,19 +77,9 @@ class ParallelTempering(ReplicaExchange):
 
         start_time = time.time()
         logger.debug("Computing energies...")
-
-
-        # NOTE: This version incurs the overhead of context creation/deletion.
-        # TODO: Use cached contexts instead.
-        
-        # Create an integrator and context.
-        thermodynamic_state = self.thermodynamic_states[0]
-        integrator = mm.VerletIntegrator(self.timestep)
-        context = mm.Context(thermodynamic_state.system, integrator, self.platform)
-
+                
         for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
-            # Set coordinates.
-            context.setPositions(self.sampler_states[replica_index].positions)
+            context = self.sampler_states[replica_index].createContext()
             # Compute potential energy.
             openmm_state = context.getState(getEnergy=True)            
             potential_energy = openmm_state.getPotentialEnergy()           
@@ -107,7 +97,7 @@ class ParallelTempering(ReplicaExchange):
             self.u_kl[replica_index,:] = energies_gather[source][index]
 
         # Clean up.
-        del context, integrator
+        del context
 
         end_time = time.time()
         elapsed_time = end_time - start_time

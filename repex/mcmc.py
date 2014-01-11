@@ -546,7 +546,7 @@ class MCMCSampler(object):
 
         return
 
-    def run(self, sampler_state, niterations):
+    def run(self, sampler_state, niterations=1):
         """
         Run the sampler for a specified number of iterations.
 
@@ -601,7 +601,7 @@ class MCMCSampler(object):
             sampler_state = move.apply(self.thermodynamic_state, sampler_state, platform=self.platform)
                 
         # Return the updated sampler state.
-        return sampler_state        
+        return sampler_state
     
 #=============================================================================================
 # Langevin dynamics move

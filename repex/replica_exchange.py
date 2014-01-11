@@ -160,8 +160,6 @@ class ReplicaExchange(object):
             logger.warn("Simulation has already been initialized.")
             raise Error
 
-        self.get_platform()
-
         logger.debug("Initialized node %d / %d" % (self.mpicomm.rank, self.mpicomm.size))
   
         citations.display_citations(self.replica_mixing_scheme, self.online_analysis)
@@ -237,12 +235,12 @@ class ReplicaExchange(object):
         # Retrieve state.
         state_index = self.replica_states[replica_index] # index of thermodynamic state that current replica is assigned to
         thermodynamic_state = self.thermodynamic_states[state_index] # thermodynamic state
-        sampler_state = self.sampler_states[state_index]
+        sampler_state = self.sampler_states[replica_index]
         
-        move = mcmc.LangevinDynamicsMove(nsteps=self.nsteps_per_iteration, timestep=self.timestep, collision_rate=self.collision_rate)
-        new_sampler_state = move.apply(thermodynamic_state, sampler_state)
+        sampler = mcmc.MCMCSampler(thermodynamic_state, move_set=[mcmc.LangevinDynamicsMove(nsteps=self.nsteps_per_iteration, timestep=self.timestep, collision_rate=self.collision_rate)])
+        new_sampler_state = sampler.run(sampler_state)
         
-        self.sampler_states[state_index] = new_sampler_state
+        self.sampler_states[replica_index] = new_sampler_state
         
         end_time = time.time()
         elapsed_time = end_time - start_time
