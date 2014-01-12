@@ -36,6 +36,24 @@ class HamiltonianExchange(ReplicaExchange):
     
     """
 
+    def __init__(self, thermodynamic_states, sampler_states, database=None, mpicomm=None, **kwargs):
+        self._check_self_consistency(thermodynamic_states)
+        super(HamiltonianExchange, self).__init__(thermodynamic_states, sampler_states, database=database, mpicomm=mpicomm, **kwargs)
+
+    def _check_self_consistency(self, thermodynamic_states):
+        """Checks that each state has the same temperature and pressure, as required for HamiltonianExchange."""
+        
+        for s0 in thermodynamic_states:
+            for s1 in thermodynamic_states:
+                if s0.pressure != s1.pressure:
+                    raise(ValueError("For HamiltonianExchange, ThermodynamicState objects cannot have different pressures!"))
+
+        for s0 in thermodynamic_states:
+            for s1 in thermodynamic_states:
+                if s0.temperature != s1.temperature:
+                    raise(ValueError("For HamiltonianExchange, ThermodynamicState objects cannot have different temperatures!"))
+
+
     @classmethod
     def create_repex(cls, reference_state, systems, coordinates, filename, mpicomm=None, **kwargs):
         """Create a new Hamiltonian exchange simulation object.

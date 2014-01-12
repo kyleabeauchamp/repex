@@ -18,6 +18,7 @@ import netCDF4 as netcdf # netcdf4-python is used in place of scipy.io.netcdf fo
 from thermodynamics import ThermodynamicState
 from replica_exchange import ReplicaExchange
 import netcdf_io
+from mcmc import MCMCSamplerState
 
 import logging
 logger = logging.getLogger(__name__)
@@ -37,7 +38,32 @@ class ParallelTempering(ReplicaExchange):
     range) is used to automatically build a set of ThermodynamicState objects for replica-exchange.  Efficiency improvements
     make use of the fact that the reduced potentials are linear in inverse temperature.
     
+    Notes
+    -----
+    
+    For creating a new ParallelTempering simulation, we recommend the use
+    of the `create_repex` function, which provides a convenient way to 
+    create PT simulations across a temperature range. 
+    
     """
+
+    def __init__(self, thermodynamic_states, sampler_states, database=None, mpicomm=None, **kwargs):
+        self._check_self_consistency(thermodynamic_states)
+        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states, database=database, mpicomm=mpicomm, **kwargs)
+
+    def _check_self_consistency(self, thermodynamic_states):
+        """Checks that each state is identical except for the temperature, as required for ParallelTempering."""
+        
+        for s0 in thermodynamic_states:
+            for s1 in thermodynamic_states:
+                if s0.pressure != s1.pressure:
+                    raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different pressures!"))
+
+        for s0 in thermodynamic_states:
+            for s1 in thermodynamic_states:
+                if s0.system.__getstate__() != s1.system.__getstate__():
+                    raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different systems!"))
+
 
     def _compute_energies(self):
         """Compute reduced potentials of all replicas at all states (temperatures).
@@ -51,65 +77,27 @@ class ParallelTempering(ReplicaExchange):
 
         start_time = time.time()
         logger.debug("Computing energies...")
-
-        if self.mpicomm:
-            # MPI implementation
-
-            # NOTE: This version incurs the overhead of context creation/deletion.
-            # TODO: Use cached contexts instead.
-            
-            # Create an integrator and context.
-            state = self.states[0]
-            integrator = mm.VerletIntegrator(self.timestep)
-            context = mm.Context(state.system, integrator, self.platform)
-
-            for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
-                # Set coordinates.
-                context.setPositions(self.replica_coordinates[replica_index])
-                # Compute potential energy.
-                openmm_state = context.getState(getEnergy=True)            
-                potential_energy = openmm_state.getPotentialEnergy()           
-                # Compute energies at this state for all replicas.
-                for state_index in range(self.n_states):
-                    # Compute reduced potential
-                    beta = 1.0 / (kB * self.states[state_index].temperature)
-                    self.u_kl[replica_index,state_index] = beta * potential_energy
-
-            # Gather energies.
-            energies_gather = self.mpicomm.allgather(self.u_kl[self.mpicomm.rank:self.n_states:self.mpicomm.size,:])
-            for replica_index in range(self.n_states):
-                source = replica_index % self.mpicomm.size # node with trajectory data
-                index = replica_index // self.mpicomm.size # index within trajectory batch
-                self.u_kl[replica_index,:] = energies_gather[source][index]
-
-            # Clean up.
-            del context, integrator
                 
-        else:
-            # Serial implementation.
-            # NOTE: This version incurs the overhead of context creation/deletion.
-            # TODO: Use cached contexts instead.
+        for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
+            context = self.sampler_states[replica_index].createContext()
+            # Compute potential energy.
+            openmm_state = context.getState(getEnergy=True)            
+            potential_energy = openmm_state.getPotentialEnergy()           
+            # Compute energies at this state for all replicas.
+            for state_index in range(self.n_states):
+                # Compute reduced potential
+                beta = 1.0 / (kB * self.thermodynamic_states[state_index].temperature)
+                self.u_kl[replica_index,state_index] = beta * potential_energy
 
-            # Create an integrator and context.
-            state = self.states[0]
-            integrator = mm.VerletIntegrator(self.timestep)
-            context = mm.Context(state.system, integrator, self.platform)
-        
-            # Compute reduced potentials for all configurations in all states.
-            for replica_index in range(self.n_states):
-                # Set coordinates.
-                context.setPositions(self.replica_coordinates[replica_index])
-                # Compute potential energy.
-                openmm_state = context.getState(getEnergy=True)            
-                potential_energy = openmm_state.getPotentialEnergy()           
-                # Compute energies at this state for all replicas.
-                for state_index in range(self.n_states):
-                    # Compute reduced potential
-                    beta = 1.0 / (kB * self.states[state_index].temperature)
-                    self.u_kl[replica_index,state_index] = beta * potential_energy
+        # Gather energies.
+        energies_gather = self.mpicomm.allgather(self.u_kl[self.mpicomm.rank:self.n_states:self.mpicomm.size,:])
+        for replica_index in range(self.n_states):
+            source = replica_index % self.mpicomm.size # node with trajectory data
+            index = replica_index // self.mpicomm.size # index within trajectory batch
+            self.u_kl[replica_index,:] = energies_gather[source][index]
 
-            # Clean up.
-            del context, integrator
+        # Clean up.
+        del context
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -171,7 +159,9 @@ class ParallelTempering(ReplicaExchange):
         else:
             database = None
         
-        repex = cls(thermodynamic_states, coordinates, database, mpicomm=mpicomm, **kwargs)
+        
+        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
         # Override title.
         repex.title = 'Parallel tempering simulation created using ParallelTempering class of repex.py on %s' % time.asctime(time.localtime())        
 

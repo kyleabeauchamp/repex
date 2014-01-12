@@ -14,6 +14,8 @@ import simtk.unit as units
 from thermodynamics import ThermodynamicState
 from constants import kB
 from utils import time_and_print, process_kwargs, fix_coordinates
+from mcmc import MCMCSamplerState
+import mcmc
 import citations
 import netcdf_io
 from version import version as __version__
@@ -25,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class ReplicaExchange(object):
 
-    def __init__(self, states, coordinates, database=None, mpicomm=None, **kwargs):
+    def __init__(self, thermodynamic_states, sampler_states, database=None, mpicomm=None, **kwargs):
         """
         """
 
@@ -41,18 +43,17 @@ class ReplicaExchange(object):
 
         self.database = database
 
-        self.states = states
-        #self.provided_coordinates = fix_coordinates(coordinates)
-        self.provided_coordinates = coordinates
+        self.thermodynamic_states = thermodynamic_states
+        self.sampler_states = sampler_states
         self.options = options
                 
         self.platform = kwargs.get("platform")  # For convenience
         
-        self.n_replicas = len(self.states)  # Determine number of replicas from the number of specified thermodynamic states.
+        self.n_replicas = len(self.thermodynamic_states)  # Determine number of replicas from the number of specified thermodynamic states.
 
         # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
-        for state in self.states:
-            if not state.is_compatible_with(self.states[0]):
+        for state in self.thermodynamic_states:
+            if not state.is_compatible_with(self.thermodynamic_states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
                 
         self.set_attributes()
@@ -123,62 +124,30 @@ class ReplicaExchange(object):
         # Clean up and close storage files.
         self._finalize()
 
-    def get_platform(self):
-        """THIS IS A HACK TO GET A DEFAULT PLATFORM."""
-
-        if self.platform is not None:
-            return
-
-        state = self.states[0]
-        context = mm.Context(state.system, mm.VerletIntegrator(self.timestep))
-        self.platform = context.getPlatform()
-        del context
-
-    def cache_contexts(self):
-        # Create cached Context objects.
-        logger.debug("Creating and caching Context objects...")
-        MAX_SEED = (1<<31) - 1 # maximum seed value (max size of signed C long)
-        seed = int(np.random.randint(MAX_SEED)) # TODO: Is this the right maximum value to use?
-
-        # Serial version.
-        initial_time = time.time()
-        for (state_index, state) in enumerate(self.states):  
-            logger.debug("Creating Context for state %d..." % state_index)
-            state._integrator = mm.LangevinIntegrator(state.temperature, self.collision_rate, self.timestep)
-            state._integrator.setRandomNumberSeed(seed)
-            initial_context_time = time.time() # DEBUG
-            if self.platform:
-                state._context = mm.Context(state.system, state._integrator, self.platform)
-            else:
-                state._context = mm.Context(state.system, state._integrator)
-            logger.debug("Context creation took %.3f s" % (time.time() - initial_context_time))
-        final_time = time.time()
-        elapsed_time = final_time - initial_time
-        logger.debug("%.3f s elapsed." % elapsed_time)
 
     def allocate_arrays(self):
         """Allocate the in-memory numpy arrays."""
   
         # Allocate storage.
-        self.replica_coordinates = list() # replica_coordinates[i] is the configuration currently held in replica i
-        self.replica_box_vectors = list() # replica_box_vectors[i] is the set of box vectors currently held in replica i  
         self.replica_states     = np.zeros([self.n_states], np.int32) # replica_states[i] is the state that replica i is currently at
         self.u_kl               = np.zeros([self.n_states, self.n_states], np.float32)        
         self.swap_Pij_accepted  = np.zeros([self.n_states, self.n_states], np.float32)
         self.Nij_proposed       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
         self.Nij_accepted       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
 
-        self.replica_coordinates = [ copy.deepcopy(self.provided_coordinates[replica_index % len(self.provided_coordinates)]) for replica_index in range(self.n_states) ]
-
-        # Assign default box vectors.
-        self.replica_box_vectors = list()
-        for state in self.states:
-            [a,b,c] = state.system.getDefaultPeriodicBoxVectors()
-            box_vectors = units.Quantity(np.zeros([3,3], np.float32), units.nanometers)
-            box_vectors[0,:] = a
-            box_vectors[1,:] = b
-            box_vectors[2,:] = c
-            self.replica_box_vectors.append(box_vectors)
+        #  Assign default box vectors.
+        #  ***************************************
+        #  To do: the following code has not yet been implemented and may require changes to the SamplerState object!
+        #  ***************************************
+        
+        #self.replica_box_vectors = list()
+        #for state in self.thermodynamic_states:
+        #    [a,b,c] = state.system.getDefaultPeriodicBoxVectors()
+        #    box_vectors = units.Quantity(np.zeros([3,3], np.float32), units.nanometers)
+        #    box_vectors[0,:] = a
+        #    box_vectors[1,:] = b
+        #    box_vectors[2,:] = c
+        #    self.replica_box_vectors.append(box_vectors)
     
 
     def _initialize(self):
@@ -191,19 +160,15 @@ class ReplicaExchange(object):
             logger.warn("Simulation has already been initialized.")
             raise Error
 
-        self.get_platform()
-
         logger.debug("Initialized node %d / %d" % (self.mpicomm.rank, self.mpicomm.size))
   
         citations.display_citations(self.replica_mixing_scheme, self.online_analysis)
 
         # Determine number of alchemical states.
-        self.n_states = len(self.states)
-
-        self.cache_contexts()
+        self.n_states = len(self.thermodynamic_states)
 
         # Determine number of atoms in systems.
-        self.n_atoms = self.states[0].system.getNumParticles()
+        self.n_atoms = self.thermodynamic_states[0].system.getNumParticles()
   
         self.allocate_arrays()
         
@@ -253,9 +218,7 @@ class ReplicaExchange(object):
         self.database.close()
         
     def _propagate_replica(self, replica_index):
-        """
-        Propagate the replica corresponding to the specified replica index.
-        Caching is used.
+        """Propagate the replica corresponding to the specified replica index.
 
         ARGUMENTS
 
@@ -271,40 +234,16 @@ class ReplicaExchange(object):
 
         # Retrieve state.
         state_index = self.replica_states[replica_index] # index of thermodynamic state that current replica is assigned to
-        state = self.states[state_index] # thermodynamic state
-
-        # Retrieve integrator and context from thermodynamic state.
-        integrator = state._integrator
-        context = state._context
-
-        coordinates = self.replica_coordinates[replica_index]            
-        context.setPositions(coordinates)
-        setpositions_end_time = time.time()
-
-        box_vectors = self.replica_box_vectors[replica_index]
-        context.setPeriodicBoxVectors(box_vectors[0,:], box_vectors[1,:], box_vectors[2,:])
-
-        context.setVelocitiesToTemperature(state.temperature)
-        setvelocities_end_time = time.time()
-        # Run dynamics.
-        integrator.step(self.nsteps_per_iteration)
-        integrator_end_time = time.time() 
-        # Store final coordinates
-        getstate_start_time = time.time()
-        openmm_state = context.getState(getPositions=True)
-        getstate_end_time = time.time()
-        self.replica_coordinates[replica_index] = openmm_state.getPositions(asNumpy=True)
-        # Store box vectors.
-        self.replica_box_vectors[replica_index] = openmm_state.getPeriodicBoxVectors(asNumpy=True)
-
+        thermodynamic_state = self.thermodynamic_states[state_index] # thermodynamic state
+        sampler_state = self.sampler_states[replica_index]
+        
+        sampler = mcmc.MCMCSampler(thermodynamic_state, move_set=[mcmc.LangevinDynamicsMove(nsteps=self.nsteps_per_iteration, timestep=self.timestep, collision_rate=self.collision_rate)])
+        new_sampler_state = sampler.run(sampler_state)
+        
+        self.sampler_states[replica_index] = new_sampler_state
+        
         end_time = time.time()
         elapsed_time = end_time - start_time
-        positions_elapsed_time = setpositions_end_time - start_time
-        velocities_elapsed_time = setvelocities_end_time - setpositions_end_time
-        integrator_elapsed_time = integrator_end_time - setvelocities_end_time
-        getstate_elapsed_time = getstate_end_time - integrator_end_time
-        logger.debug("Replica %d/%d: integrator elapsed time %.3f s (positions %.3f s | velocities %.3f s | integrate+getstate %.3f s)." % (replica_index, self.n_replicas, elapsed_time, positions_elapsed_time, velocities_elapsed_time, integrator_elapsed_time+getstate_elapsed_time))
-
         return elapsed_time
 
     def _propagate_replicas_mpi(self):
@@ -350,12 +289,12 @@ class ReplicaExchange(object):
 
         start_time = time.time()
         replica_indices_gather = self.mpicomm.allgather(replica_indices)
-        replica_coordinates_gather = self.mpicomm.allgather([ self.replica_coordinates[replica_index] for replica_index in replica_indices ])
-        replica_box_vectors_gather = self.mpicomm.allgather([ self.replica_box_vectors[replica_index] for replica_index in replica_indices ])
+        
+        sampler_states_gather = self.mpicomm.allgather([self.sampler_states[replica_index] for replica_index in replica_indices ])
         for (source, replica_indices) in enumerate(replica_indices_gather):
             for (index, replica_index) in enumerate(replica_indices):
-                self.replica_coordinates[replica_index] = replica_coordinates_gather[source][index]
-                self.replica_box_vectors[replica_index] = replica_box_vectors_gather[source][index]
+                self.sampler_states[replica_index].positions = sampler_states_gather[source][index].positions
+                self.sampler_states[replica_index].box_vectors = sampler_states_gather[source][index].box_vectors
 
         end_time = time.time()
         logger.debug("Synchronizing configurations and box vectors: elapsed time %.3f s" % (end_time - start_time))
@@ -380,35 +319,10 @@ class ReplicaExchange(object):
         ns_per_day = self.timestep * self.nsteps_per_iteration / time_per_replica * 24*60*60 / units.nanoseconds
         logger.debug("Time to propagate all replicas: %.3f s (%.3f per replica, %.3f ns/day)." % (elapsed_time, time_per_replica, ns_per_day))
 
-    def _minimize_replica(self, replica_index):
-        """
-        Minimize the specified replica.
-
-        """
-        # Retrieve thermodynamic state.
-        state_index = self.replica_states[replica_index] # index of thermodynamic state that current replica is assigned to
-        state = self.states[state_index] # thermodynamic state
-        # Retrieve integrator and context.
-        # TODO: This needs to be adapted in case Integrator and Context objects are not cached.
-        integrator = state._integrator
-        context = state._context
-        # Set coordinates.
-        coordinates = self.replica_coordinates[replica_index]            
-        context.setPositions(coordinates)
-        # Set box vectors.
-        box_vectors = self.replica_box_vectors[replica_index]
-        context.setPeriodicBoxVectors(box_vectors[0,:], box_vectors[1,:], box_vectors[2,:])
-        # Minimize energy.
-        minimized_coordinates = mm.LocalEnergyMinimizer.minimize(context, self.minimize_tolerance, self.minimize_maxIterations)
-        # Store final coordinates
-        openmm_state = context.getState(getPositions=True)
-        self.replica_coordinates[replica_index] = openmm_state.getPositions(asNumpy=True)
-        # Clean up.
-        del integrator, context
 
     def _minimize_all_replicas(self):
         for replica_index in range(self.n_states):
-            self._minimize_replica(replica_index)
+            self.sampler_states[replica_index].minimize()
             
     def _minimize_and_equilibrate(self):
         """
@@ -447,7 +361,7 @@ class ReplicaExchange(object):
         # Compute energies for this node's share of states.
         for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
             for replica_index in range(self.n_states):
-                self.u_kl[replica_index,state_index] = self.states[state_index].reduced_potential(self.replica_coordinates[replica_index], box_vectors=self.replica_box_vectors[replica_index], platform=self.platform)
+                self.u_kl[replica_index,state_index] = self.thermodynamic_states[state_index].reduced_potential(self.sampler_states[replica_index].positions, box_vectors=self.sampler_states[replica_index].box_vectors, platform=self.platform)
 
         # Send final energies to all nodes.
         energies_gather = self.mpicomm.allgather(self.u_kl[:,self.mpicomm.rank:self.n_states:self.mpicomm.size])
@@ -776,14 +690,15 @@ class ReplicaExchange(object):
         if not self.mpicomm.rank == 0:
             return
 
-        coordinates = np.array([self.replica_coordinates[replica_index] / units.nanometers for replica_index in range(self.n_states)])
-        box_vectors = np.array([self.replica_box_vectors[replica_index] / units.nanometers for replica_index in range(self.n_states)])
+        coordinates = np.array([self.sampler_states[replica_index].positions / units.nanometers for replica_index in range(self.n_states)])
+        box_vectors = np.array([self.sampler_states[replica_index].box_vectors / units.nanometers for replica_index in range(self.n_states)])
+        
         
         volumes = []
         for replica_index in range(self.n_states):
-            v = self.replica_box_vectors[replica_index]
+            v = self.sampler_states[replica_index].box_vectors
             state_index = self.replica_states[replica_index]
-            state = self.states[state_index]
+            state = self.thermodynamic_states[state_index]
             volumes.append(state._volume(v) / (units.nanometers**3))
         
         volumes = np.array(volumes)
@@ -799,11 +714,9 @@ class ReplicaExchange(object):
 
         abort = False
 
-        # Check positions.
+        # Check sampler state (positions and generalized coordinates).
         for replica_index in range(self.n_replicas):
-            coordinates = self.replica_coordinates[replica_index]
-            x = coordinates / units.nanometers
-            if np.any(np.isnan(x)):
+            if self.sampler_states[replica_index].has_nan():
                 logger.warn("nan encountered in replica %d coordinates." % replica_index)
                 abort = True
 
@@ -848,8 +761,11 @@ class ReplicaExchange(object):
             database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates, **kwargs)  # To do: eventually use factory for looking up database type via filename
         else:
             database = None
+
+
+        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]        
         
-        repex = cls(thermodynamic_states, coordinates, database, mpicomm=mpicomm, **kwargs)
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
         repex._initialize()
         repex._run_iteration_zero()
         return repex
@@ -882,7 +798,9 @@ class ReplicaExchange(object):
         coordinates = mpicomm.bcast(coordinates, root=0)
         iteration = mpicomm.bcast(iteration, root=0)
 
-        repex = cls(thermodynamic_states, coordinates, database, mpicomm=mpicomm, **kwargs)
+        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
+
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
         repex.iteration = iteration
         repex._initialize()
         return repex

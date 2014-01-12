@@ -54,7 +54,7 @@ def test_parallel_tempering(mpicomm):
 
     u = permute_energies(u_permuted, s)
 
-    states = replica_exchange.states
+    states = replica_exchange.thermodynamic_states
     u0 = np.array([[ho.reduced_potential_expectation(s0, s1) for s1 in states] for s0 in states])
 
     l0 = np.log(u0)  # Compare on log scale because uncertainties are proportional to values
