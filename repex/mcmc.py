@@ -596,6 +596,8 @@ class MCMCSampler(object):
             weights /= weights.sum() # normalize
             move_sequence = np.random.choice(moves, size=niterations, p=weights)
         
+        sampler_state.system = self.thermodynamic_state.system  # HACK!
+        
         # Apply move sequence.
         for move in move_sequence:
             sampler_state = move.apply(self.thermodynamic_state, sampler_state, platform=self.platform)
