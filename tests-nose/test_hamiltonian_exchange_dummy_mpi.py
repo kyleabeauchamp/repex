@@ -6,7 +6,7 @@ from repex import testsystems
 from repex.utils import permute_energies
 from repex import dummympi
 import tempfile
-from mdtraj.testing import eq
+from mdtraj.testing import eq, skipif
 from repex.constants import kB
 
 
@@ -16,10 +16,8 @@ def test_power_oscillators():
 
     temperature = 1 * unit.kelvin
 
-    K0 = 100.0  # Units are automatically added by the testsystem
-    K = [K0, K0 * 10., K0 * 1.]
     powers = [2., 2., 4.]
-    n_replicas = len(K)
+    n_replicas = len(powers)
 
     oscillators = [testsystems.PowerOscillator(b=powers[i]) for i in range(n_replicas)]
 
@@ -45,16 +43,15 @@ def test_power_oscillators():
 
     eq(l0, l, decimal=1)
 
+@skipif(True)
 def test_hrex_save_and_load():
 
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
     temperature = 1 * unit.kelvin
 
-    K0 = 100.0  # Units are automatically added by the testsystem
-    K = [K0, K0 * 10., K0 * 1.]
     powers = [2., 2., 4.]
-    n_replicas = len(K)
+    n_replicas = len(powers)
 
     oscillators = [testsystems.PowerOscillator(b=powers[i]) for i in range(n_replicas)]
 
