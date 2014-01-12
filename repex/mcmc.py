@@ -748,7 +748,7 @@ class LangevinDynamicsMove(MCMCMove):
         if 'MonteCarloBarostat' in forces:
             barostat = forces['MonteCarloBarostat']
             barostat.setTemperature(thermodynamic_state.temperature)            
-            parameter_name = barostat.getParameter()
+            parameter_name = barostat.Pressure()
 
         # Create integrator.
         integrator = mm.LangevinIntegrator(thermodynamic_state.temperature, self.collision_rate, self.timestep)

@@ -43,7 +43,7 @@ def test_power_oscillators():
 
     eq(l0, l, decimal=1)
 
-@skipif(True)
+
 def test_hrex_save_and_load():
 
     nc_filename = tempfile.mkdtemp() + "/out.nc"
