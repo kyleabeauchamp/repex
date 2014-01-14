@@ -117,11 +117,13 @@ def get_data_filename(relative_path):
 
 
 def all_subclasses(cls):
+    """Lists all subclasses (including cls) of cls."""
     return [cls] + cls.__subclasses__() + [g for s in cls.__subclasses__()
                                    for g in all_subclasses(s)]
 
 
 def find_matching_subclass(cls, name):
+    """Look for a subclass (or the base class) of cls whose name matches name."""
     subclasses = all_subclasses(cls)
     for sub in subclasses:
         if sub.__name__ == name:
