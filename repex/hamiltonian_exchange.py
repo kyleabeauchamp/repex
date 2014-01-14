@@ -87,4 +87,4 @@ class HamiltonianExchange(ReplicaExchange):
         """
       
         thermodynamic_states = [ ThermodynamicState(system=system, temperature=reference_state.temperature, pressure=reference_state.pressure) for system in systems ]
-        return super(cls, HamiltonianExchange).create_repex(thermodynamic_states, coordinates, filename, mpicomm=mpicomm, **kwargs)
+        return super(cls, HamiltonianExchange).create(thermodynamic_states, coordinates, filename, mpicomm=mpicomm, **kwargs)
