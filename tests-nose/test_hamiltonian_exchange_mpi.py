@@ -4,6 +4,7 @@ from repex.thermodynamics import ThermodynamicState
 from repex import hamiltonian_exchange
 from repex import testsystems
 from repex.utils import permute_energies
+from repex import resume
 import tempfile
 from mdtraj.testing import eq
 from repex.constants import kB
@@ -87,7 +88,7 @@ def test_hrex_save_and_load(mpicomm):
     replica_exchange.run()
 
     
-    replica_exchange = hamiltonian_exchange.HamiltonianExchange.resume_repex(nc_filename, mpicomm=mpicomm)
+    replica_exchange = resume(nc_filename, mpicomm=mpicomm)
     eq(replica_exchange.iteration, 200)
     replica_exchange.number_of_iterations = 300
     replica_exchange.run()

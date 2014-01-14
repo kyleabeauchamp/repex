@@ -4,6 +4,7 @@ from repex.thermodynamics import ThermodynamicState
 from repex.parallel_tempering import ParallelTempering
 from repex import testsystems
 from repex.utils import permute_energies
+from repex import resume
 import tempfile
 from mdtraj.testing import eq
 import nose
@@ -82,7 +83,7 @@ def test_parallel_tempering_save_and_load(mpicomm):
     replica_exchange.number_of_iterations = 200
     replica_exchange.run()
     
-    replica_exchange = ParallelTempering.resume_repex(nc_filename, mpicomm=mpicomm)
+    replica_exchange = resume(nc_filename, mpicomm=mpicomm)
     eq(replica_exchange.iteration, 200)
     replica_exchange.number_of_iterations = 300
     replica_exchange.run()

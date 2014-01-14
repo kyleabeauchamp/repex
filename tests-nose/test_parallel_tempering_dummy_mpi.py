@@ -5,6 +5,7 @@ from repex.parallel_tempering import ParallelTempering
 from repex import testsystems
 from repex.utils import permute_energies
 from repex import dummympi
+from repex import resume
 import tempfile
 from mdtraj.testing import eq
 
@@ -66,7 +67,7 @@ def test_parallel_tempering_save_and_load():
     replica_exchange.number_of_iterations = 200
     replica_exchange.run()
     
-    replica_exchange = ParallelTempering.resume_repex(nc_filename)
+    replica_exchange = resume(nc_filename)
     eq(replica_exchange.iteration, 200)
     replica_exchange.number_of_iterations = 300
     replica_exchange.run()

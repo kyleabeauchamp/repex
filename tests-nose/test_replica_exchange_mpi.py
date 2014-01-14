@@ -4,6 +4,7 @@ from repex.thermodynamics import ThermodynamicState
 from repex.replica_exchange import ReplicaExchange
 from repex import testsystems
 from repex.utils import permute_energies
+from repex import resume
 import tempfile
 from mdtraj.testing import eq, skipif
 import nose
@@ -80,6 +81,6 @@ def test_harmonic_oscillators_save_and_load(mpicomm):
     replica_exchange.number_of_iterations = 50
     replica_exchange.run()
 
-    replica_exchange = ReplicaExchange.resume_repex(nc_filename, mpicomm=mpicomm)
+    replica_exchange = resume(nc_filename, mpicomm=mpicomm)
     replica_exchange.number_of_iterations = 100
     replica_exchange.run()
