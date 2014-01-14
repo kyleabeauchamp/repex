@@ -788,6 +788,16 @@ def resume(filename, mpicomm=None, **kwargs):
     kwargs (dict) - Optional parameters to use for specifying simulation
         Provided keywords will be matched to object variables to replace defaults.
         
+    Notes
+    -----
+    
+    This function attempts to find a subclasses of ReplicaExchange whose
+    name matches the `repex_classname` attribute in the netCDF database.
+    The matching only considers subclasses of ReplicaExchange that have
+    been imported in the current python session.  To use a user-defined
+    subclass, you must make sure you `import xyz`, where xyz is the python
+    module where the subclass is defined.
+        
     """
     if mpicomm is None:
         mpicomm = dummympi.DummyMPIComm()
