@@ -27,3 +27,4 @@ contains a number of utilities required for Yank and other packages.
 """
 
 from repex import testsystems
+from repex.replica_exchange import resume

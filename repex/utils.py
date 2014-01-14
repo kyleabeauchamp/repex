@@ -114,3 +114,16 @@ def get_data_filename(relative_path):
         raise ValueError("Sorry! %s does not exist. If you just added it, you'll have to re-install" % fn)
 
     return fn
+
+
+def all_subclasses(cls):
+    return [cls] + cls.__subclasses__() + [g for s in cls.__subclasses__()
+                                   for g in all_subclasses(s)]
+
+
+def find_matching_subclass(cls, name):
+    subclasses = all_subclasses(cls)
+    for sub in subclasses:
+        if sub.__name__ == name:
+            return sub
+    raise(TypeError("Cannot find matching subclass!"))

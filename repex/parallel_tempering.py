@@ -106,7 +106,7 @@ class ParallelTempering(ReplicaExchange):
 
 
     @classmethod
-    def create_repex(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, **kwargs):
+    def create(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, **kwargs):
         """Create a new ParallelTempering simulation.
         
         Parameters

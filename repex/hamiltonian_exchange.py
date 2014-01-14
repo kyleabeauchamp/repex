@@ -55,7 +55,7 @@ class HamiltonianExchange(ReplicaExchange):
 
 
     @classmethod
-    def create_repex(cls, reference_state, systems, coordinates, filename, mpicomm=None, **kwargs):
+    def create(cls, reference_state, systems, coordinates, filename, mpicomm=None, **kwargs):
         """Create a new Hamiltonian exchange simulation object.
 
         Parameters
