@@ -110,13 +110,13 @@ class NetCDFDatabase(object):
         ncvar_volumes.units = 'nm**3'
 
         # Define long (human-readable) names for variables.
-        ncvar_positions, "long_name", "positions[iteration][replica][atom][spatial] is position of coordinate 'spatial' of atom 'atom' from replica 'replica' for iteration 'iteration'."
-        ncvar_states,    "long_name", "states[iteration][replica] is the state index (0..n_states-1) of replica 'replica' of iteration 'iteration'."
-        ncvar_energies,  "long_name", "energies[iteration][replica][state] is the reduced (unitless) energy of replica 'replica' from iteration 'iteration' evaluated at state 'state'."
-        ncvar_proposed,  "long_name", "proposed[iteration][i][j] is the number of proposed transitions between states i and j from iteration 'iteration-1'."
-        ncvar_accepted,  "long_name", "accepted[iteration][i][j] is the number of proposed transitions between states i and j from iteration 'iteration-1'."
-        ncvar_box_vectors, "long_name", "box_vectors[iteration][replica][i][j] is dimension j of box vector i for replica 'replica' from iteration 'iteration-1'."
-        ncvar_volumes, "long_name", "volume[iteration][replica] is the box volume for replica 'replica' from iteration 'iteration-1'."
+        ncvar_positions.long_name = "positions[iteration][replica][atom][spatial] is position of coordinate 'spatial' of atom 'atom' from replica 'replica' for iteration 'iteration'."
+        ncvar_states.long_name = "states[iteration][replica] is the state index (0..n_states-1) of replica 'replica' of iteration 'iteration'."
+        ncvar_energies.long_name = "energies[iteration][replica][state] is the reduced (unitless) energy of replica 'replica' from iteration 'iteration' evaluated at state 'state'."
+        ncvar_proposed.long_name = "proposed[iteration][i][j] is the number of proposed transitions between states i and j from iteration 'iteration-1'."
+        ncvar_accepted.long_name = "accepted[iteration][i][j] is the number of proposed transitions between states i and j from iteration 'iteration-1'."
+        ncvar_box_vectors.long_name = "box_vectors[iteration][replica][i][j] is dimension j of box vector i for replica 'replica' from iteration 'iteration-1'."
+        ncvar_volumes.long_name = "volume[iteration][replica] is the box volume for replica 'replica' from iteration 'iteration-1'."
 
         # Create timestamp variable.
         ncvar_timestamp = self.ncfile.createVariable('timestamp', "f", ('iteration',))
