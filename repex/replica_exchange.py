@@ -11,6 +11,7 @@ import pandas as pd
 import simtk.openmm as mm
 import simtk.unit as units
 
+import thermodynamics
 from thermodynamics import ThermodynamicState
 from constants import kB
 from utils import time_and_print, process_kwargs, fix_coordinates, find_matching_subclass
@@ -703,7 +704,7 @@ class ReplicaExchange(object):
             v = self.sampler_states[replica_index].box_vectors
             state_index = self.replica_states[replica_index]
             state = self.thermodynamic_states[state_index]
-            volumes.append(state._volume(v) / (units.nanometers**3))
+            volumes.append(thermodynamics.volume(v) / (units.nanometers ** 3))
         
         volumes = np.array(volumes)
 
