@@ -47,6 +47,6 @@ def test_parallel_tempering_all_testsystems():
         positions = [testsystem.positions] * n_temps
         
         nc_filename = tempfile.mkdtemp() + "/out.nc"
-        replica_exchange = ParallelTempering.create_repex(system, positions, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, **{})
+        replica_exchange = ParallelTempering.create(system, positions, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, **{})
         replica_exchange.number_of_iterations = 3
         replica_exchange.run()

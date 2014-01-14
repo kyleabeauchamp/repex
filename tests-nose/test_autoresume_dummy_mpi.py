@@ -24,7 +24,7 @@ def test_hrex_save_and_load():
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
 
-    rex = hamiltonian_exchange.HamiltonianExchange.create_repex(state, systems, positions, nc_filename, **{})
+    rex = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, **{})
     rex.number_of_iterations = 5
     rex.run()
 
@@ -53,7 +53,7 @@ def test_repex_save_and_load():
 
     coordinates = [positions] * n_replicas
 
-    rex = replica_exchange.ReplicaExchange.create_repex(states, coordinates, nc_filename, **{})
+    rex = replica_exchange.ReplicaExchange.create(states, coordinates, nc_filename, **{})
     rex.number_of_iterations = 5
     rex.run()
     
@@ -80,7 +80,7 @@ def test_parallel_tempering_save_and_load():
 
     coordinates = [positions] * n_temps
     
-    rex = parallel_tempering.ParallelTempering.create_repex(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, **{})
+    rex = parallel_tempering.ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, **{})
     rex.number_of_iterations = 5
     rex.run()
     

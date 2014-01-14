@@ -44,7 +44,7 @@ def test_harmonic_oscillators(mpicomm):
 
     coordinates = [positions] * n_replicas
 
-    replica_exchange = ReplicaExchange.create_repex(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
+    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 1000
     replica_exchange.run()
 
@@ -77,7 +77,7 @@ def test_harmonic_oscillators_save_and_load(mpicomm):
 
     coordinates = [positions] * n_replicas
 
-    replica_exchange = ReplicaExchange.create_repex(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
+    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 50
     replica_exchange.run()
 

@@ -47,7 +47,7 @@ def test_power_oscillators(mpicomm):
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
 
-    replica_exchange = hamiltonian_exchange.HamiltonianExchange.create_repex(state, systems, positions, nc_filename, mpicomm=mpicomm, **{})
+    replica_exchange = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 2000
     replica_exchange.run()
 
@@ -83,7 +83,7 @@ def test_hrex_save_and_load(mpicomm):
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
 
-    replica_exchange = hamiltonian_exchange.HamiltonianExchange.create_repex(state, systems, positions, nc_filename, mpicomm=mpicomm, **{})
+    replica_exchange = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 200
     replica_exchange.run()
 
