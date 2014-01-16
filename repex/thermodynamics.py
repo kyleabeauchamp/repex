@@ -116,8 +116,6 @@ class ThermodynamicState(object):
 
         # Store provided values.
         if system is not None:
-            if type(system) == str:
-                system = str_to_system(system)
             if type(system) is not mm.System:
                 raise(TypeError("system must be an OpenMM System; instead found %s" % type(system)))
             self.system = copy.deepcopy(system) # TODO: Do this when deep copy works.
@@ -296,7 +294,7 @@ class ThermodynamicState(object):
         # Compute reduced potential.
         reduced_potential = beta * potential_energy
         if self.pressure is not None:
-            reduced_potential += beta * self.pressure * self._volume(box_vectors) * units.AVOGADRO_CONSTANT_NA
+            reduced_potential += beta * self.pressure * volume(box_vectors) * units.AVOGADRO_CONSTANT_NA
 
         # Clean up context if requested, or if we're using Cuda (which can only have one active Context at a time).
         if (not self._cache_context) or (self._context.getPlatform().getName() == 'Cuda'):
@@ -397,7 +395,7 @@ class ThermodynamicState(object):
             # Compute reduced potential.
             u_k[k] = beta * potential_energy
             if self.pressure is not None:
-                u_k[k] += beta * self.pressure * self._volume(box_vectors_list[k]) * units.AVOGADRO_CONSTANT_NA
+                u_k[k] += beta * self.pressure * volume(box_vectors_list[k]) * units.AVOGADRO_CONSTANT_NA
 
         # Clean up context if requested, or if we're using Cuda (which can only have one active Context at a time).
         if (not self._cache_context) or (self._context.getPlatform().getName() == 'Cuda'):
@@ -489,34 +487,39 @@ class ThermodynamicState(object):
         
         return repr(r)
 
-    def _volume(self, box_vectors):
-        """Return the volume of the current configuration.
+def volume(box_vectors):
+    """Return the volume of the current configuration.
+    
+    Parameters
+    ----------
+    box_vectors : simtk.unit.Quantity
+        Box vectors of the configuration in question.
 
-        Returns
-        -------
+    Returns
+    -------
 
-        volume : simtk.unit.Quantity
-            The volume of the system (in units of length^3), or None if no box coordinates are defined
+    volume : simtk.unit.Quantity
+        The volume of the system (in units of length^3), or None if no box coordinates are defined
 
-        Examples
-        --------
-        
-        Compute the volume of a Lennard-Jones fluid at 100 K and 1 atm.
+    Examples
+    --------
+    
+    Compute the volume of a Lennard-Jones fluid at 100 K and 1 atm.
 
-        >>> from repex import testsystems
-        >>> system_container = testsystems.LennardJonesFluid()        
-        >>> (system, positions) = system_container.system, system_container.positions
-        >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin, pressure=1.0*units.atmosphere)
-        >>> box_vectors = system.getDefaultPeriodicBoxVectors()
-        >>> volume = state._volume(box_vectors)
-        
-        """
+    >>> from repex import testsystems
+    >>> system_container = testsystems.LennardJonesFluid()        
+    >>> (system, positions) = system_container.system, system_container.positions
+    >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin, pressure=1.0*units.atmosphere)
+    >>> box_vectors = system.getDefaultPeriodicBoxVectors()
+    >>> v = volume(box_vectors)
+    
+    """
 
-        # Compute volume of parallelepiped.
-        [a,b,c] = box_vectors
-        A = np.array([a/a.unit, b/a.unit, c/a.unit])
-        volume = np.linalg.det(A) * a.unit**3
-        return volume
+    # Compute volume of parallelepiped.
+    [a,b,c] = box_vectors
+    A = np.array([a/a.unit, b/a.unit, c/a.unit])
+    volume = np.linalg.det(A) * a.unit**3
+    return volume
 
 #=============================================================================================
 # MAIN AND TESTS
