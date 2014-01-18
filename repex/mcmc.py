@@ -90,6 +90,7 @@ import simtk.openmm as mm
 import simtk.unit as u
 
 from repex import integrators
+from repex import thermodynamics
 
 from abc import abstractmethod 
 
@@ -176,7 +177,7 @@ class MCMCSamplerState(object):
         self.potential_energy = openmm_state.getPotentialEnergy()
         self.kinetic_energy = openmm_state.getKineticEnergy()
         self.total_energy = self.potential_energy + self.kinetic_energy
-        self.volume = self.box_vectors[0][0] * self.box_vectors[1][1] * self.box_vectors[2][2] # TODO: Generalize to non rectilinear
+        self.volume = thermodynamics.volume(self.box_vectors)
 
         # Clean up.
         del context
@@ -231,7 +232,7 @@ class MCMCSamplerState(object):
         self.potential_energy = openmm_state.getPotentialEnergy()
         self.kinetic_energy = openmm_state.getKineticEnergy()
         self.total_energy = self.potential_energy + self.kinetic_energy
-        self.volume = self.box_vectors[0][0] * self.box_vectors[1][1] * self.box_vectors[2][2] # TODO: Generalize to non rectilinear
+        self.volume = thermodynamics.volume(self.box_vectors)
         
         return self
 
@@ -1293,7 +1294,7 @@ class MonteCarloBarostatMove(MCMCMove):
         state_update_final_time = time.time()
 
         # DEBUG
-        #print thermodynamic_state._volume(updated_sampler_state.box_vectors)
+        #print thermodynamics.volume(updated_sampler_state.box_vectors)
         
         # Clean up.
         del context

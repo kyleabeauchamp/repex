@@ -5,6 +5,7 @@ from repex.parallel_tempering import ParallelTempering
 from repex import testsystems
 from repex.utils import permute_energies
 from repex import dummympi
+from repex import resume
 import tempfile
 from mdtraj.testing import eq
 
@@ -25,7 +26,7 @@ def test_parallel_tempering():
     coordinates = [positions] * n_temps
 
     mpicomm = dummympi.DummyMPIComm()
-    replica_exchange = ParallelTempering.create_repex(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
+    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
     
     eq(replica_exchange.n_replicas, n_temps)
 
@@ -62,11 +63,11 @@ def test_parallel_tempering_save_and_load():
     coordinates = [positions] * n_temps
     
     mpicomm = dummympi.DummyMPIComm()
-    replica_exchange = ParallelTempering.create_repex(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
+    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 200
     replica_exchange.run()
     
-    replica_exchange = ParallelTempering.resume_repex(nc_filename)
+    replica_exchange = resume(nc_filename)
     eq(replica_exchange.iteration, 200)
     replica_exchange.number_of_iterations = 300
     replica_exchange.run()
@@ -88,7 +89,7 @@ def test_parallel_tempering_explicit_temperature_input():
     coordinates = [positions] * n_temps
 
     mpicomm = dummympi.DummyMPIComm()
-    replica_exchange = ParallelTempering.create_repex(system, coordinates, nc_filename, temperatures=temperatures, mpicomm=mpicomm, **{})
+    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, temperatures=temperatures, mpicomm=mpicomm, **{})
     replica_exchange.number_of_iterations = 100
     replica_exchange.run()
     

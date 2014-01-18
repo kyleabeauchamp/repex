@@ -11,9 +11,10 @@ import pandas as pd
 import simtk.openmm as mm
 import simtk.unit as units
 
+import thermodynamics
 from thermodynamics import ThermodynamicState
 from constants import kB
-from utils import time_and_print, process_kwargs, fix_coordinates
+from utils import time_and_print, process_kwargs, fix_coordinates, find_matching_subclass
 from mcmc import MCMCSamplerState
 import mcmc
 import citations
@@ -57,6 +58,10 @@ class ReplicaExchange(object):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
                 
         self.set_attributes()
+        
+        if self.database is not None:
+            self.database.ncfile.repex_classname = self.__class__.__name__
+            # Eventually, we might want to wrap a setter around the ncfile
 
     def set_attributes(self):
         for key, val in self.options.iteritems():
@@ -699,7 +704,7 @@ class ReplicaExchange(object):
             v = self.sampler_states[replica_index].box_vectors
             state_index = self.replica_states[replica_index]
             state = self.thermodynamic_states[state_index]
-            volumes.append(state._volume(v) / (units.nanometers**3))
+            volumes.append(thermodynamics.volume(v) / (units.nanometers ** 3))
         
         volumes = np.array(volumes)
 
@@ -739,7 +744,7 @@ class ReplicaExchange(object):
         logger.info("\n%-24s %16s\n%s" % ("reduced potential (kT)", "current state", U.to_string()))
 
     @classmethod
-    def create_repex(cls, thermodynamic_states, coordinates, filename, mpicomm=None, **kwargs):
+    def create(cls, thermodynamic_states, coordinates, filename, mpicomm=None, **kwargs):
         """Create a new ReplicaExchange simulation.
         
         Parameters
@@ -770,37 +775,50 @@ class ReplicaExchange(object):
         repex._run_iteration_zero()
         return repex
     
-    @classmethod
-    def resume_repex(cls, filename, mpicomm=None, **kwargs):
-        """Resume an existing ReplicaExchange (or subclass) simulation.
+
+def resume(filename, mpicomm=None, **kwargs):
+    """Resume an existing ReplicaExchange (or subclass) simulation.
+    
+    Parameters
+    ----------
+
+    filename : string 
+        name of NetCDF file to bind to for simulation output and checkpointing
+    mpicomm : mpi4py communicator, default=None
+        MPI communicator, if parallel execution is desired.      
+    kwargs (dict) - Optional parameters to use for specifying simulation
+        Provided keywords will be matched to object variables to replace defaults.
         
-        Parameters
-        ----------
-
-        filename : string 
-            name of NetCDF file to bind to for simulation output and checkpointing
-        mpicomm : mpi4py communicator, default=None
-            MPI communicator, if parallel execution is desired.      
-        kwargs (dict) - Optional parameters to use for specifying simulation
-            Provided keywords will be matched to object variables to replace defaults.
-            
-        """
-        if mpicomm is None:
-            mpicomm = dummympi.DummyMPIComm()
+    Notes
+    -----
+    
+    This function attempts to find a subclasses of ReplicaExchange whose
+    name matches the `repex_classname` attribute in the netCDF database.
+    The matching only considers subclasses of ReplicaExchange that have
+    been imported in the current python session.  To use a user-defined
+    subclass, you must make sure you `import xyz`, where xyz is the python
+    module where the subclass is defined.
         
-        if mpicomm.rank == 0:
-            database = netcdf_io.NetCDFDatabase(filename, **kwargs)  # To do: eventually use factory for looking up database type via filename
-            thermodynamic_states, coordinates, iteration = database.thermodynamic_states, database.coordinates, database.iteration
-        else:
-            database, thermodynamic_states, coordinates, iteration = None, None, None, None
+    """
+    if mpicomm is None:
+        mpicomm = dummympi.DummyMPIComm()
+    
+    if mpicomm.rank == 0:
+        database = netcdf_io.NetCDFDatabase(filename, **kwargs)  # To do: eventually use factory for looking up database type via filename
+        thermodynamic_states, coordinates, iteration, repex_classname = database.thermodynamic_states, database.coordinates, database.iteration, database.ncfile.repex_classname
+    else:
+        database, thermodynamic_states, coordinates, iteration, repex_classname = None, None, None, None, None
 
-        thermodynamic_states = mpicomm.bcast(thermodynamic_states, root=0)
-        coordinates = mpicomm.bcast(coordinates, root=0)
-        iteration = mpicomm.bcast(iteration, root=0)
+    thermodynamic_states = mpicomm.bcast(thermodynamic_states, root=0)
+    coordinates = mpicomm.bcast(coordinates, root=0)
+    iteration = mpicomm.bcast(iteration, root=0)
+    repex_classname = mpicomm.bcast(repex_classname, root=0)
 
-        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
-
-        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
-        repex.iteration = iteration
-        repex._initialize()
-        return repex
+    sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
+    
+    cls = find_matching_subclass(ReplicaExchange, repex_classname)
+    
+    repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
+    repex.iteration = iteration
+    repex._initialize()
+    return repex
