@@ -162,7 +162,7 @@ class NetCDFDatabase(object):
             ncvar_temperatures.units = 'atm'
             ncvar_temperatures.long_name = "pressures[state] is the external pressure of thermodynamic state 'state'"
             for state_index in range(self.n_states):
-                ncvar_temperatures[state_index] = self.thermodynamic_states[state_index].pressure / units.atmospheres                
+                ncvar_temperatures[state_index] = self.thermodynamic_states[state_index].pressure / units.atmospheres
 
         # TODO: Store other thermodynamic variables store in ThermodynamicState?  Generalize?
                 
