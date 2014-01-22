@@ -28,12 +28,9 @@ logger = logging.getLogger(__name__)
 
 class ReplicaExchange(object):
 
-    def __init__(self, thermodynamic_states, sampler_states, database=None, mpicomm=None, **kwargs):
+    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, **kwargs):
         """
         """
-
-        # To allow for parameters to be modified after object creation, class is not initialized until a call to self._initialize().
-        self._initialized = False
         
         if mpicomm is None:
             self.mpicomm = dummympi.DummyMPIComm()
@@ -45,9 +42,17 @@ class ReplicaExchange(object):
         self.database = database
 
         self.thermodynamic_states = thermodynamic_states
-        self.sampler_states = sampler_states
         self.options = options
-                
+        
+        self.n_states = len(self.thermodynamic_states)
+        self.n_atoms = self.thermodynamic_states[0].system.getNumParticles()        
+        
+        if sampler_states is not None:  # New Repex job
+            self.sampler_states = sampler_states
+            self._allocate_arrays()
+        else:  # Resume repex job
+            self._broadcast_database()
+
         self.platform = kwargs.get("platform")  # For convenience
         
         self.n_replicas = len(self.thermodynamic_states)  # Determine number of replicas from the number of specified thermodynamic states.
@@ -63,6 +68,34 @@ class ReplicaExchange(object):
             self.database.ncfile.repex_classname = self.__class__.__name__
             # Eventually, we might want to wrap a setter around the ncfile
 
+        logger.debug("Initialized node %d / %d" % (self.mpicomm.rank, self.mpicomm.size))
+        citations.display_citations(self.replica_mixing_scheme, self.online_analysis)
+
+
+    def _broadcast_database(self):
+        """Load the positions, replica_states, u_kl, proposed, and accepted from root node database."""
+        if self.mpicomm.rank == 0:
+            positions = self.database.last_positions
+            replica_states = self.database.last_replica_states
+            u_kl = self.database.last_u_kl
+            Nij_proposed = self.database.last_proposed
+            Nij_accepted = self.database.last_accepted
+            iteration = self.database.last_iteration
+            iteration += 1  # Want to begin with the NEXT step of repex
+        else:
+            positions, replica_states, u_kl, Nij_proposed, Nij_accepted, iteration = None, None, None, None
+
+        positions = self.mpicomm.bcast(positions, root=0)
+        self.replica_states = self.mpicomm.bcast(replica_states, root=0)
+        self.u_kl = self.mpicomm.bcast(u_kl, root=0)
+        self.iteration = self.mpicomm.bcast(iteration, root=0)
+        self.Nij_proposed = self.mpicomm.bcast(Nij_proposed, root=0)
+        self.Nij_accepted = self.mpicomm.bcast(Nij_accepted, root=0)
+        self.iteration = iteration
+
+        self.sampler_states = [MCMCSamplerState(self.thermodynamic_states[k].system, positions[k]) for k in range(len(self.thermodynamic_states))]
+
+
     def set_attributes(self):
         for key, val in self.options.iteritems():
             logger.debug("Setting option %s as %s" % (key, val))
@@ -77,10 +110,6 @@ class ReplicaExchange(object):
         if possible; otherwise, an exception will be raised.
 
         """
-
-        # Make sure we've initialized everything and bound to a storage file before we begin execution.
-        if not self._initialized:
-            self._initialize()
 
         # Main loop
         run_start_time = time.time()              
@@ -130,58 +159,16 @@ class ReplicaExchange(object):
         self._finalize()
 
 
-    def allocate_arrays(self):
+    def _allocate_arrays(self):
         """Allocate the in-memory numpy arrays."""
   
-        # Allocate storage.
-        self.replica_states     = np.zeros([self.n_states], np.int32) # replica_states[i] is the state that replica i is currently at
+        self.replica_states     = np.arange(self.n_states)  # replica_states[i] is the state that replica i is currently at
         self.u_kl               = np.zeros([self.n_states, self.n_states], np.float32)        
-        self.swap_Pij_accepted  = np.zeros([self.n_states, self.n_states], np.float32)
         self.Nij_proposed       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
-        self.Nij_accepted       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1
-
-        #  Assign default box vectors.
-        #  ***************************************
-        #  To do: the following code has not yet been implemented and may require changes to the SamplerState object!
-        #  ***************************************
+        self.Nij_accepted       = np.zeros([self.n_states, self.n_states], np.int64) # Nij_proposed[i][j] is the number of swaps proposed between states i and j, prior of 1    
         
-        #self.replica_box_vectors = list()
-        #for state in self.thermodynamic_states:
-        #    [a,b,c] = state.system.getDefaultPeriodicBoxVectors()
-        #    box_vectors = units.Quantity(np.zeros([3,3], np.float32), units.nanometers)
-        #    box_vectors[0,:] = a
-        #    box_vectors[1,:] = b
-        #    box_vectors[2,:] = c
-        #    self.replica_box_vectors.append(box_vectors)
-    
+        self.iteration = 0
 
-    def _initialize(self):
-        """
-        Initialize the simulation, and bind to a storage file.
-
-        """
-
-        if self._initialized:
-            logger.warn("Simulation has already been initialized.")
-            raise Error
-
-        logger.debug("Initialized node %d / %d" % (self.mpicomm.rank, self.mpicomm.size))
-  
-        citations.display_citations(self.replica_mixing_scheme, self.online_analysis)
-
-        # Determine number of alchemical states.
-        self.n_states = len(self.thermodynamic_states)
-
-        # Determine number of atoms in systems.
-        self.n_atoms = self.thermodynamic_states[0].system.getNumParticles()
-  
-        self.allocate_arrays()
-        
-        # Assign initial replica states.
-        for replica_index in range(self.n_states):
-            self.replica_states[replica_index] = replica_index
-
-        self._initialized = True
         
     def _run_iteration_zero(self):
             # Minimize and equilibrate all replicas.
@@ -216,11 +203,6 @@ class ReplicaExchange(object):
         """Clean up, closing files.
         """
         self._finalize()
-
-        if not self.mpicomm.rank == 0:
-            return
-
-        self.database.close()
         
     def _propagate_replica(self, replica_index):
         """Propagate the replica corresponding to the specified replica index.
@@ -778,7 +760,6 @@ class ReplicaExchange(object):
         sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]        
         
         repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
-        repex._initialize()
         repex._run_iteration_zero()
         return repex
     
@@ -812,20 +793,14 @@ def resume(filename, mpicomm=None, **kwargs):
     
     if mpicomm.rank == 0:
         database = netcdf_io.NetCDFDatabase(filename, **kwargs)  # To do: eventually use factory for looking up database type via filename
-        thermodynamic_states, coordinates, iteration, repex_classname = database.thermodynamic_states, database.coordinates, database.iteration, database.ncfile.repex_classname
+        thermodynamic_states, repex_classname = database.thermodynamic_states, database.repex_classname
     else:
-        database, thermodynamic_states, coordinates, iteration, repex_classname = None, None, None, None, None
+        database, thermodynamic_states, repex_classname = None, None, None
 
     thermodynamic_states = mpicomm.bcast(thermodynamic_states, root=0)
-    coordinates = mpicomm.bcast(coordinates, root=0)
-    iteration = mpicomm.bcast(iteration, root=0)
     repex_classname = mpicomm.bcast(repex_classname, root=0)
-
-    sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
     
     cls = find_matching_subclass(ReplicaExchange, repex_classname)
     
-    repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
-    repex.iteration = iteration
-    repex._initialize()
+    repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm, **kwargs)
     return repex

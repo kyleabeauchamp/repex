@@ -18,66 +18,53 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-
 class NetCDFDatabase(object):
     options_to_store = ['collision_rate', 'constraint_tolerance', 'timestep', 'nsteps_per_iteration', 'number_of_iterations', 'equilibration_timestep', 'number_of_equilibration_iterations', 'title', 'minimize', 'replica_mixing_scheme', 'online_analysis', 'show_mixing_statistics']
 
-    def __init__(self, filename, states=None, coordinates=None, **kwargs):
+    def __init__(self, filename, thermodynamic_states=None, positions=None, **kwargs):
 
-        self.options = process_kwargs(kwargs)
         # Check if netcdf file exists.
         resume = os.path.exists(filename) and (os.path.getsize(filename) > 0)
         
         if resume:
-            assert states is None and coordinates is None, "Cannot input states and coordinates if you are resuming from disk."
+            assert thermodynamic_states is None and positions is None, "Cannot input thermodynamic_states and positions if you are resuming from disk."
             self.ncfile = netcdf.Dataset(filename, 'a', version='NETCDF4')
+
         else:
-            assert states is not None and coordinates is not None, "Must input states and coordinates if no existing database."
-            assert len(states) == len(coordinates), "Must have same number of states and coordinate sets."
+            assert thermodynamic_states is not None and positions is not None, "Must input thermodynamic_states and coordinates if no existing database."
+            assert len(thermodynamic_states) == len(positions), "Must have same number of thermodynamic_states and coordinate sets."
+            
             self.ncfile = netcdf.Dataset(filename, 'w', version='NETCDF4')
         
         self.title = "No Title."
         
         if resume:
-            self._restore_database()
+            logger.info("Attempting to resume by reading thermodynamic states and options...")
+            self.options = self._load_options()
         else:
-            self._initialize_database(states, coordinates, **kwargs)
+            self._initialize_netcdf(thermodynamic_states, positions)
+            self.options = process_kwargs(kwargs)
+            self._store_options()
 
         # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
         for state in self.thermodynamic_states:
             if not state.is_compatible_with(self.thermodynamic_states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
 
-    def _initialize_database(self, states, coordinates, **kwargs):
 
-        if states is None or coordinates is None:
-            raise(ValueError("Cannot create database without inputting states and coordinates"))
-
-        self.thermodynamic_states = states        
-        self.coordinates = coordinates
-        self._initialize_netcdf()
-
-
-    def _restore_database(self):
-        logger.info("Attempting to resume by reading thermodynamic states and options...")
-        self.thermodynamic_states = self._load_thermodynamic_states()
-        self.options = self._load_options()
-        
-        self.coordinates, self.replica_box_vectors, self.u_kl, self.iteration = self._load_last_iteration()
-
-    def _initialize_netcdf(self):
+    def _initialize_netcdf(self, thermodynamic_states, positions):
         """Initialize NetCDF file for storage.
         """
         
-        self.n_replicas = len(self.thermodynamic_states)
-        self.n_atoms = len(self.coordinates[0])
-        self.n_states = len(self.thermodynamic_states)
-        assert self.n_replicas == len(self.coordinates), "Error: inconsistent number of replicas."
+        n_replicas = len(thermodynamic_states)
+        n_atoms = len(positions[0])
+        n_states = len(thermodynamic_states)
+        
         
         # Create dimensions.
         self.ncfile.createDimension('iteration', 0) # unlimited number of iterations
-        self.ncfile.createDimension('replica', self.n_replicas) # number of replicas
-        self.ncfile.createDimension('atom', self.n_atoms) # number of atoms in system
+        self.ncfile.createDimension('replica', n_replicas) # number of replicas
+        self.ncfile.createDimension('atom', n_atoms) # number of atoms in system
         self.ncfile.createDimension('spatial', 3) # number of spatial dimensions
 
         # Set global attributes.
@@ -127,56 +114,15 @@ class NetCDFDatabase(object):
         ncvar_iteration_time = ncgrp_timings.createVariable('mixing', 'f', ('iteration',)) # time for mixing
         ncvar_iteration_time = ncgrp_timings.createVariable('propagate', 'f', ('iteration','replica')) # total time to propagate each replica
         
-        # Store thermodynamic states.
-        self._store_thermodynamic_states(self.thermodynamic_states)
-
-        # Store run options
-        self._store_options()
+        # Store thermodynamic states using @property setter
+        self.thermodynamic_states = thermodynamic_states
 
         # Force sync to disk to avoid data loss.
         self.ncfile.sync()
 
-    def _store_thermodynamic_states(self, states):
-        """Store the thermodynamic states in a NetCDF file.
-        """
-        logger.debug("Storing thermodynamic states in NetCDF file...")
-            
-        # Create a group to store state information.
-        ncgrp_stateinfo = self.ncfile.createGroup('thermodynamic_states')
 
-        # Get number of states.
-        ncvar_n_states = ncgrp_stateinfo.createVariable('n_states', int)
-        ncvar_n_states.assignValue(self.n_states)
-
-
-        # Temperatures.
-        ncvar_temperatures = ncgrp_stateinfo.createVariable('temperatures', 'f', ('replica',))
-        ncvar_temperatures.units = 'K'
-        ncvar_temperatures.long_name = "temperatures[state] is the temperature of thermodynamic state 'state'"
-        for state_index in range(self.n_states):
-            ncvar_temperatures[state_index] = self.thermodynamic_states[state_index].temperature / units.kelvin
-
-        # Pressures.
-        if self.thermodynamic_states[0].pressure is not None:
-            ncvar_temperatures = ncgrp_stateinfo.createVariable('pressures', 'f', ('replica',))
-            ncvar_temperatures.units = 'atm'
-            ncvar_temperatures.long_name = "pressures[state] is the external pressure of thermodynamic state 'state'"
-            for state_index in range(self.n_states):
-                ncvar_temperatures[state_index] = self.thermodynamic_states[state_index].pressure / units.atmospheres
-
-        # TODO: Store other thermodynamic variables store in ThermodynamicState?  Generalize?
-                
-        # Systems.
-        ncvar_serialized_states = ncgrp_stateinfo.createVariable('systems', str, ('replica',), zlib=True)
-        ncvar_serialized_states.long_name = "systems[state] is the serialized OpenMM System corresponding to the thermodynamic state 'state'"
-        for state_index in range(self.n_states):
-            logger.debug("Serializing state %d..." % state_index)
-            serialized = self.thermodynamic_states[state_index].system.__getstate__()
-            logger.debug("Serialized state is %d B | %.3f KB | %.3f MB" % (len(serialized), len(serialized) / 1024.0, len(serialized) / 1024.0 / 1024.0))
-            ncvar_serialized_states[state_index] = serialized
-
-
-    def _load_thermodynamic_states(self):
+    @property
+    def thermodynamic_states(self):
         """Return the thermodynamic states from a NetCDF file.
         
         Returns
@@ -216,6 +162,48 @@ class NetCDFDatabase(object):
             thermodynamic_states.append(state)
         
         return thermodynamic_states
+
+
+    @thermodynamic_states.setter
+    def thermodynamic_states(self, thermodynamic_states):
+        """Store the thermodynamic states in a NetCDF file.
+        """
+        logger.debug("Storing thermodynamic states in NetCDF file...")
+            
+        # Create a group to store state information.
+        ncgrp_stateinfo = self.ncfile.createGroup('thermodynamic_states')
+
+        # Get number of states.
+        ncvar_n_states = ncgrp_stateinfo.createVariable('n_states', int)
+        ncvar_n_states.assignValue(self.n_states)
+
+
+        # Temperatures.
+        ncvar_temperatures = ncgrp_stateinfo.createVariable('temperatures', 'f', ('replica',))
+        ncvar_temperatures.units = 'K'
+        ncvar_temperatures.long_name = "temperatures[state] is the temperature of thermodynamic state 'state'"
+        for state_index in range(self.n_states):
+            ncvar_temperatures[state_index] = thermodynamic_states[state_index].temperature / units.kelvin
+
+        # Pressures.
+        if thermodynamic_states[0].pressure is not None:
+            ncvar_temperatures = ncgrp_stateinfo.createVariable('pressures', 'f', ('replica',))
+            ncvar_temperatures.units = 'atm'
+            ncvar_temperatures.long_name = "pressures[state] is the external pressure of thermodynamic state 'state'"
+            for state_index in range(n_states):
+                ncvar_temperatures[state_index] = thermodynamic_states[state_index].pressure / units.atmospheres
+
+        # TODO: Store other thermodynamic variables store in ThermodynamicState?  Generalize?
+                
+        # Systems.
+        ncvar_serialized_states = ncgrp_stateinfo.createVariable('systems', str, ('replica',), zlib=True)
+        ncvar_serialized_states.long_name = "systems[state] is the serialized OpenMM System corresponding to the thermodynamic state 'state'"
+        for state_index in range(self.n_states):
+            logger.debug("Serializing state %d..." % state_index)
+            serialized = thermodynamic_states[state_index].system.__getstate__()
+            logger.debug("Serialized state is %d B | %.3f KB | %.3f MB" % (len(serialized), len(serialized) / 1024.0, len(serialized) / 1024.0 / 1024.0))
+            ncvar_serialized_states[state_index] = serialized
+
 
     def _store_options(self):
         """Store run parameters in NetCDF file.
@@ -296,59 +284,6 @@ class NetCDFDatabase(object):
             
         return options
 
-    def _load_last_iteration(self):
-        """Return data from the last iteration saved in a database.
-        
-        Returns
-        -------
-        
-        replica_coordinates : list
-            The coordinates of each replica
-        replica_box_vectors : list
-            The box vectors of each replica
-        u_kl : np.ndarray
-            Energies of each replica in each state
-        iteration : int
-            The current iteration
-        
-        Notes
-        -----
-        u_kl is current not used by the Repex object.        
-        """
-
-        # TODO: Perform sanity check on file before resuming
-
-        iteration = self.ncfile.variables['positions'].shape[0] - 1 
-        n_states = self.ncfile.variables['positions'].shape[1]
-        n_atoms = self.ncfile.variables['positions'].shape[2]
-        
-        logging.debug("iteration = %d, n_states = %d, n_atoms = %d" % (iteration, n_states, n_atoms))
-
-        # Restore positions.
-        replica_coordinates = list()
-        for replica_index in range(n_states):
-            x = self.ncfile.variables['positions'][iteration, replica_index, :, :].astype(np.float64).copy()
-            coordinates = units.Quantity(x, units.nanometers)
-            replica_coordinates.append(coordinates)
-        
-        # Restore box vectors.
-        replica_box_vectors = list()
-        for replica_index in range(n_states):
-            x = self.ncfile.variables['box_vectors'][iteration,replica_index,:,:].astype(np.float64).copy()
-            box_vectors = units.Quantity(x, units.nanometers)
-            replica_box_vectors.append(box_vectors)
-
-        # Restore state information.
-        replica_states = self.ncfile.variables['states'][iteration,:].copy()
-
-        # Restore energies.
-        u_kl = self.ncfile.variables['energies'][iteration,:,:].copy()
-        
-        # We will work on the next iteration.
-        iteration += 1
-        
-        return replica_coordinates, replica_box_vectors, u_kl, iteration
-
 
     def write(self, key, value, iteration, sync=True):
         """Write a variable to the database and sync."""
@@ -364,10 +299,11 @@ class NetCDFDatabase(object):
         self.ncfile.sync()
     
     def _finalize(self):
-        logger.warn("WARNING: database finalize() has not yet been implemented.")
+        self.sync()
 
-    def close(self):
-        logger.warn("WARNING: database close() has not yet been implemented.")
+    def __del__(self):
+        self._finalize()
+        self.ncfile.close()
 
     @property
     def positions(self):
@@ -409,3 +345,104 @@ class NetCDFDatabase(object):
         """Return the timestamp."""
         return self.ncfile.variables['timestamp']
 
+    @property
+    def repex_classname(self):
+        return self.ncfile.repex_classname
+
+    @property
+    def last_proposed(self):
+        iteration = self.last_iteration
+        return self.proposed[iteration]
+
+    @property
+    def last_accepted(self):
+        iteration = self.last_iteration
+        return self.accepted[iteration]
+
+    @property
+    def last_box_vectors(self):
+        """Return data from the last iteration saved in a database.
+        
+        Returns
+        -------
+        
+        replica_coordinates : list
+            The coordinates of each replica
+        """
+        
+        iteration = self.last_iteration
+        
+        replica_box_vectors = list()
+        for replica_index in range(self.n_states):
+            x = self.ncfile.variables['box_vectors'][iteration, replica_index,:,:].astype(np.float64).copy()
+            box_vectors = units.Quantity(x, units.nanometers)
+            replica_box_vectors.append(box_vectors)        
+        
+        return replica_box_vectors
+        
+    @property
+    def last_u_kl(self):
+        """Return data from the last iteration saved in a database.
+        
+        Returns
+        -------
+        
+        replica_coordinates : list
+            The coordinates of each replica
+        """
+        iteration = self.last_iteration
+        return self.energies[iteration,:].copy()
+
+    
+    @property
+    def last_iteration(self):
+        """Return data from the last iteration saved in a database.
+        
+        Returns
+        -------
+        
+        replica_coordinates : list
+            The coordinates of each replica
+        """
+        return self.positions.shape[0] - 1
+
+    @property
+    def last_positions(self):
+        """Return positions from the last iteration saved in a database.
+        
+        Returns
+        -------
+        
+        replica_coordinates : list
+            The coordinates of each replica
+            
+        Notes
+        -----
+        Formatted for input to Repex
+        """    
+        
+        iteration = self.last_iteration
+        
+        replica_coordinates = list()
+        for replica_index in range(self.n_states):
+            x = self.positions[iteration, replica_index, :, :].astype(np.float64).copy()
+            coordinates = units.Quantity(x, units.nanometers)
+            replica_coordinates.append(coordinates)
+        
+        return replica_coordinates
+
+    @property
+    def last_replica_states(self):
+        
+        iteration = self.last_iteration
+        return self.states[iteration,:].copy()
+
+
+    @property
+    def n_states(self):
+        return self.positions.shape[1]
+
+    
+    @property
+    def n_atoms(self):
+        return self.positions.shape[2]
