@@ -57,7 +57,7 @@ def test_repex_multiple_save_and_load():
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
     T_min = 1.0 * unit.kelvin
-    T_i = [T_min, T_min * 10., T_min * 100.]
+    T_i = [T_min, T_min * 2.0, T_min * 2.0]
     n_replicas = len(T_i)
 
     ho = testsystems.HarmonicOscillator()
@@ -98,7 +98,7 @@ def test_parallel_tempering_multiple_save_and_load():
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
     T_min = 1.0 * unit.kelvin
-    T_max = 10.0 * unit.kelvin
+    T_max = 2.0 * unit.kelvin
     n_temps = 3
 
     ho = testsystems.HarmonicOscillator()
