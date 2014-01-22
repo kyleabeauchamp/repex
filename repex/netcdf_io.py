@@ -11,7 +11,7 @@ import simtk.unit as units
 import netCDF4 as netcdf
 
 from thermodynamics import ThermodynamicState
-from utils import time_and_print, process_kwargs, fix_coordinates, str_to_system
+from utils import process_kwargs, fix_coordinates, str_to_system
 from version import version as __version__
 
 import logging
@@ -39,16 +39,16 @@ class NetCDFDatabase(object):
         self.title = "No Title."
         
         if resume:
-            self.restore_database()
+            self._restore_database()
         else:
-            self.initialize_database(states, coordinates, **kwargs)
+            self._initialize_database(states, coordinates, **kwargs)
 
         # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
         for state in self.thermodynamic_states:
             if not state.is_compatible_with(self.thermodynamic_states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
 
-    def initialize_database(self, states, coordinates, **kwargs):
+    def _initialize_database(self, states, coordinates, **kwargs):
 
         if states is None or coordinates is None:
             raise(ValueError("Cannot create database without inputting states and coordinates"))
@@ -58,10 +58,10 @@ class NetCDFDatabase(object):
         self._initialize_netcdf()
 
 
-    def restore_database(self):
+    def _restore_database(self):
         logger.info("Attempting to resume by reading thermodynamic states and options...")
-        self.thermodynamic_states = self.load_thermodynamic_states()
-        self.options = self.load_options()
+        self.thermodynamic_states = self._load_thermodynamic_states()
+        self.options = self._load_options()
         
         self.coordinates, self.replica_box_vectors, self.u_kl, self.iteration = self._load_last_iteration()
 
@@ -136,7 +136,6 @@ class NetCDFDatabase(object):
         # Force sync to disk to avoid data loss.
         self.ncfile.sync()
 
-    @time_and_print
     def _store_thermodynamic_states(self, states):
         """Store the thermodynamic states in a NetCDF file.
         """
@@ -163,7 +162,7 @@ class NetCDFDatabase(object):
             ncvar_temperatures.units = 'atm'
             ncvar_temperatures.long_name = "pressures[state] is the external pressure of thermodynamic state 'state'"
             for state_index in range(self.n_states):
-                ncvar_temperatures[state_index] = self.thermodynamic_states[state_index].pressure / units.atmospheres                
+                ncvar_temperatures[state_index] = self.thermodynamic_states[state_index].pressure / units.atmospheres
 
         # TODO: Store other thermodynamic variables store in ThermodynamicState?  Generalize?
                 
@@ -177,7 +176,7 @@ class NetCDFDatabase(object):
             ncvar_serialized_states[state_index] = serialized
 
 
-    def load_thermodynamic_states(self):
+    def _load_thermodynamic_states(self):
         """Return the thermodynamic states from a NetCDF file.
         
         Returns
@@ -259,7 +258,7 @@ class NetCDFDatabase(object):
             if option_unit: setattr(ncvar, 'units', str(option_unit))
             setattr(ncvar, 'type', option_type.__name__) 
 
-    def load_options(self):
+    def _load_options(self):
         """Return a dictionary of options from a loaded NetCDF file.
         """
         
@@ -351,44 +350,62 @@ class NetCDFDatabase(object):
         return replica_coordinates, replica_box_vectors, u_kl, iteration
 
 
-    def output_iteration(self, **kwargs):
-        """To do: use mdtraj.utils.ensure_type to ensure correct shapes and dtypes!"""
+    def write(self, key, value, iteration, sync=True):
+        """Write a variable to the database and sync."""
         
-        required_keys = ["iteration", "coordinates", "box_vectors", "volumes", "replica_states", "energies", "proposed", "accepted", "time"]
-        assert set(required_keys) == set(kwargs.keys()), "Wrong keys provided to output_iteration!"
-
-        iteration = kwargs["iteration"]
+        self.ncfile.variables[key][iteration] = value
         
-        self.ncfile.variables["positions"][iteration] = kwargs["coordinates"]
-        self.ncfile.variables['box_vectors'][iteration] = kwargs["box_vectors"]
-        self.ncfile.variables['volumes'][iteration] = kwargs["volumes"]    
-        self.ncfile.variables['states'][iteration] = kwargs["replica_states"]
-        self.ncfile.variables['energies'][iteration] = kwargs["energies"]
-        self.ncfile.variables['proposed'][iteration] = kwargs["proposed"]
-        self.ncfile.variables['accepted'][iteration] = kwargs["accepted"]
-        self.ncfile.variables['timestamp'][iteration] = kwargs["time"]
+        if sync == True:
+            self.sync()
 
+
+    def sync(self):
+        """Sync the database."""
         self.ncfile.sync()
-
-    @property
-    def proposed(self):
-        """Return proposed moves
-        """
-        return self.ncfile.variables['proposed'][:]
-        
-    @property
-    def accepted(self):
-        """Return accepted moves"""
-        return self.ncfile.variables['accepted'][:]
-
-    @property
-    def states(self):
-        """Return state indices"""
-        return self.ncfile.variables['states'][:]
-
     
-    def finalize(self):
+    def _finalize(self):
         logger.warn("WARNING: database finalize() has not yet been implemented.")
 
     def close(self):
         logger.warn("WARNING: database close() has not yet been implemented.")
+
+    @property
+    def positions(self):
+        """Return the positions."""
+        return self.ncfile.variables['positions']
+
+    @property
+    def box_vectors(self):
+        """Return the box vectors."""
+        return self.ncfile.variables['box_vectors']
+                    
+    @property
+    def volumes(self):
+        """Return the volumes."""
+        return self.ncfile.variables['volumes']
+
+    @property
+    def states(self):
+        """Return the state indices."""
+        return self.ncfile.variables['states']
+        
+    @property
+    def energies(self):
+        """Return the energies."""
+        return self.ncfile.variables['energies']
+                                    
+    @property
+    def proposed(self):
+        """Return the proposed moves."""
+        return self.ncfile.variables['proposed']
+        
+    @property
+    def accepted(self):
+        """Return the accepted moves."""
+        return self.ncfile.variables['accepted']
+
+    @property
+    def timestamp(self):
+        """Return the timestamp."""
+        return self.ncfile.variables['timestamp']
+

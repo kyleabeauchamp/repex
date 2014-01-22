@@ -210,7 +210,7 @@ class ReplicaExchange(object):
         if not self.mpicomm.rank == 0:
             return
         
-        self.database.finalize()
+        self.database._finalize()
 
     def __del__(self):
         """Clean up, closing files.
@@ -690,12 +690,12 @@ class ReplicaExchange(object):
         Notes
         -----
         Will save the following information:
-        "iteration", "coordinates", "box_vectors", "volumes", "replica_states", "energies", "proposed", "accepted", "time"
+        "iteration", "positions", "box_vectors", "volumes", "energies", "energies", "proposed", "accepted", "timestamp"
         """
         if not self.mpicomm.rank == 0:
             return
 
-        coordinates = np.array([self.sampler_states[replica_index].positions / units.nanometers for replica_index in range(self.n_states)])
+        positions = np.array([self.sampler_states[replica_index].positions / units.nanometers for replica_index in range(self.n_states)])
         box_vectors = np.array([self.sampler_states[replica_index].box_vectors / units.nanometers for replica_index in range(self.n_states)])
         
         
@@ -708,10 +708,17 @@ class ReplicaExchange(object):
         
         volumes = np.array(volumes)
 
-        self.database.output_iteration(iteration=self.iteration, coordinates=coordinates, box_vectors=box_vectors, 
-                volumes=volumes, replica_states=self.replica_states, energies=self.u_kl, 
-                proposed=self.Nij_proposed, accepted=self.Nij_accepted, time=time.time())
-    
+        self.database.write("positions", positions, self.iteration, sync=False)
+        self.database.write("box_vectors", box_vectors, self.iteration, sync=False)
+        self.database.write("volumes", volumes, self.iteration, sync=False)
+        self.database.write("states", self.replica_states, self.iteration, sync=False)
+        self.database.write("energies", self.u_kl, self.iteration, sync=False)
+        self.database.write("proposed", self.Nij_proposed, self.iteration, sync=False)
+        self.database.write("accepted", self.Nij_accepted, self.iteration, sync=False)
+        self.database.write("timestamp", time.time(), self.iteration, sync=False)
+        
+        self.database.sync()
+            
 
     def _run_sanity_checks(self):
         """Run some checks on current state information to see if something has gone wrong that precludes continuation.
