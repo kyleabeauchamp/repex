@@ -169,7 +169,10 @@ class NetCDFDatabase(object):
         """Store the thermodynamic states in a NetCDF file.
         """
         logger.debug("Storing thermodynamic states in NetCDF file...")
-            
+
+        if self.ncfile.groups.has_key("thermodynamic_states"):
+            raise(IOError("Thermodynamic states have already been set!"))
+
         # Create a group to store state information.
         ncgrp_stateinfo = self.ncfile.createGroup('thermodynamic_states')
 
