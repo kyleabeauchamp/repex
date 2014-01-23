@@ -83,7 +83,7 @@ class ReplicaExchange(object):
             iteration = self.database.last_iteration
             iteration += 1  # Want to begin with the NEXT step of repex
         else:
-            positions, replica_states, u_kl, Nij_proposed, Nij_accepted, iteration = None, None, None, None
+            positions, replica_states, u_kl, Nij_proposed, Nij_accepted, iteration = None, None, None, None, None, None
 
         positions = self.mpicomm.bcast(positions, root=0)
         self.replica_states = self.mpicomm.bcast(replica_states, root=0)
@@ -91,7 +91,6 @@ class ReplicaExchange(object):
         self.iteration = self.mpicomm.bcast(iteration, root=0)
         self.Nij_proposed = self.mpicomm.bcast(Nij_proposed, root=0)
         self.Nij_accepted = self.mpicomm.bcast(Nij_accepted, root=0)
-        self.iteration = iteration
 
         self.sampler_states = [MCMCSamplerState(self.thermodynamic_states[k].system, positions[k]) for k in range(len(self.thermodynamic_states))]
 
@@ -115,7 +114,7 @@ class ReplicaExchange(object):
         run_start_time = time.time()              
         run_start_iteration = self.iteration
         while (self.iteration < self.number_of_iterations):
-            logger.debug("\nIteration %d / %d" % (self.iteration+1, self.number_of_iterations))
+            logger.debug("\nIteration %d / %d" % (self.iteration + 1, self.number_of_iterations))
             initial_time = time.time()
 
             # Attempt replica swaps to sample from equilibrium permuation of states associated with replicas.
