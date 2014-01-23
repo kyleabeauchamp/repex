@@ -47,9 +47,9 @@ class ParallelTempering(ReplicaExchange):
     
     """
 
-    def __init__(self, thermodynamic_states, sampler_states, database=None, mpicomm=None, **kwargs):
+    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, **kwargs):
         self._check_self_consistency(thermodynamic_states)
-        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states, database=database, mpicomm=mpicomm, **kwargs)
+        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states=sampler_states, database=database, mpicomm=mpicomm, **kwargs)
 
     def _check_self_consistency(self, thermodynamic_states):
         """Checks that each state is identical except for the temperature, as required for ParallelTempering."""
@@ -165,7 +165,6 @@ class ParallelTempering(ReplicaExchange):
         # Override title.
         repex.title = 'Parallel tempering simulation created using ParallelTempering class of repex.py on %s' % time.asctime(time.localtime())        
 
-        repex._initialize()
         repex._run_iteration_zero()
         return repex
         
