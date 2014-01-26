@@ -763,7 +763,7 @@ class ReplicaExchange(object):
         return repex
     
 
-def resume(filename, mpicomm=None, **kwargs):
+def resume(filename, mpicomm=None):
     """Resume an existing ReplicaExchange (or subclass) simulation.
     
     Parameters
@@ -791,7 +791,7 @@ def resume(filename, mpicomm=None, **kwargs):
         mpicomm = dummympi.DummyMPIComm()
     
     if mpicomm.rank == 0:
-        database = netcdf_io.NetCDFDatabase(filename, **kwargs)  # To do: eventually use factory for looking up database type via filename
+        database = netcdf_io.NetCDFDatabase(filename)  # To do: eventually use factory for looking up database type via filename
         thermodynamic_states, repex_classname = database.thermodynamic_states, database.repex_classname
     else:
         database, thermodynamic_states, repex_classname = None, None, None
@@ -801,5 +801,5 @@ def resume(filename, mpicomm=None, **kwargs):
     
     cls = find_matching_subclass(ReplicaExchange, repex_classname)
     
-    repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm, **kwargs)
+    repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm)
     return repex
