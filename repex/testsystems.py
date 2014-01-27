@@ -1999,7 +1999,12 @@ class CustomGBForceSystem(TestSystem):
         self.system, self.positions = system, positions
 
 class AMOEBAIonBox(TestSystem):
-    """A single Ca2 ion in a water box."""
+    """A single Ca2 ion in a water box.
+
+    >>> testsystem = AMOEBAIonBox()
+    >>> system, positions = testsystem.system, testsystem.positions
+    
+    """
     def __init__(self):
         pdb_filename = get_data_filename("data/amoeba/ion-in-water.pdb")
         pdbfile = app.PDBFile(pdb_filename)
@@ -2012,7 +2017,12 @@ class AMOEBAIonBox(TestSystem):
         self.system, self.positions = system, positions
 
 class AMOEBAProteinBox(TestSystem):
-    """PDB 1AP4 in water box."""
+    """PDB 1AP4 in water box.
+
+    >>> testsystem = AMOEBAProteinBox()
+    >>> system, positions = testsystem.system, testsystem.positions    
+
+    """
     def __init__(self):
         pdb_filename = get_data_filename("data/amoeba/1AP4_14_wat.pdb")
         pdbfile = app.PDBFile(pdb_filename)
