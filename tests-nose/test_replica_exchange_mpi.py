@@ -79,7 +79,7 @@ def test_harmonic_oscillators_save_and_load(mpicomm):
     replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
     
-    rex.extend(50)
+    replica_exchange.extend(50)
 
     replica_exchange = resume(nc_filename, mpicomm=mpicomm)    
     replica_exchange.run()
