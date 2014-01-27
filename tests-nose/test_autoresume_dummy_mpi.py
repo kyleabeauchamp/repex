@@ -24,13 +24,13 @@ def test_hrex_save_and_load():
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
 
-    rex = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, **{})
-    rex.number_of_iterations = 5
+    parameters = {"number_of_iterations":5}
+    rex = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, parameters=parameters)
     rex.run()
 
+    rex.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 10  # Hacky way to modify database.  Maybe add setter?    
     
     rex = resume(nc_filename)
-    rex.number_of_iterations = 10
     rex.run()
 
     eq(rex.__class__.__name__, "HamiltonianExchange")
@@ -53,12 +53,13 @@ def test_repex_save_and_load():
 
     coordinates = [positions] * n_replicas
 
-    rex = replica_exchange.ReplicaExchange.create(states, coordinates, nc_filename, **{})
-    rex.number_of_iterations = 5
+    parameters = {"number_of_iterations":5}
+    rex = replica_exchange.ReplicaExchange.create(states, coordinates, nc_filename, parameters=parameters)
     rex.run()
     
+    rex.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 10  # Hacky way to modify database.  Maybe add setter?        
+    
     rex = resume(nc_filename)
-    rex.number_of_iterations = 10
     rex.run()
 
     eq(rex.__class__.__name__, "ReplicaExchange")
@@ -80,12 +81,13 @@ def test_parallel_tempering_save_and_load():
 
     coordinates = [positions] * n_temps
     
-    rex = parallel_tempering.ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, **{})
-    rex.number_of_iterations = 5
+    parameters = {"number_of_iterations":5}
+    rex = parallel_tempering.ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, parameters=parameters)
     rex.run()
     
+    rex.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 10  # Hacky way to modify database.  Maybe add setter?        
+    
     rex = resume(nc_filename)
-    rex.number_of_iterations = 10
     rex.run()
     
     eq(rex.__class__.__name__, "ParallelTempering")

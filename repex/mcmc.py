@@ -1,5 +1,3 @@
-#!/usr/local/bin/env python
-
 #=============================================================================================
 # MODULE DOCSTRING
 #=============================================================================================
@@ -77,13 +75,10 @@ TODO
 # GLOBAL IMPORTS
 #=============================================================================================
 
-import os
-import math
 import copy
 import time
 
 import numpy as np
-import numpy.random
 
 import simtk
 import simtk.openmm as mm

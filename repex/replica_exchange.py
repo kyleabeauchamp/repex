@@ -1,20 +1,13 @@
-#!/usr/local/bin/env python
-
-import copy
 import time
 import datetime
 
 import numpy as np
-import numpy.linalg
 import pandas as pd
 
-import simtk.openmm as mm
 import simtk.unit as units
 
 import thermodynamics
-from thermodynamics import ThermodynamicState
-from constants import kB
-from utils import time_and_print, process_kwargs, fix_coordinates, find_matching_subclass
+from utils import find_matching_subclass, dict_to_named_tuple
 from mcmc import MCMCSamplerState
 import mcmc
 import citations
@@ -28,7 +21,27 @@ logger = logging.getLogger(__name__)
 
 class ReplicaExchange(object):
 
-    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, **kwargs):
+    default_parameters = {}
+    default_parameters["collision_rate"] = 91.0 / units.picosecond 
+    default_parameters["constraint_tolerance"] = 1.0e-6 
+    default_parameters["timestep"] = 2.0 * units.femtosecond
+    default_parameters["nsteps_per_iteration"] = 500
+    default_parameters["number_of_iterations"] = 10
+    default_parameters["equilibration_timestep"] = 1.0 * units.femtosecond
+    default_parameters["number_of_equilibration_iterations"] = 1
+    default_parameters["title"] = 'Replica-exchange simulation created using ReplicaExchange class of repex.py on %s' % time.asctime(time.localtime())        
+    default_parameters["minimize"] = True 
+    default_parameters["minimize_tolerance"] = 1.0 * units.kilojoules_per_mole / units.nanometers # if specified, set minimization tolerance
+    default_parameters["minimize_maxIterations"] = 0 # if nonzero, set maximum iterations
+    default_parameters["platform"] = None
+    default_parameters["replica_mixing_scheme"] = 'swap-all' # mix all replicas thoroughly
+    default_parameters["online_analysis"] = False # if True, analysis will occur each iteration
+    default_parameters["show_energies"] = True
+    default_parameters["show_mixing_statistics"] = True
+    default_parameters["platform"] = None
+    default_parameters["integrator"] = None
+
+    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, parameters={}):
         """
         """
         
@@ -37,23 +50,29 @@ class ReplicaExchange(object):
         else:
             self.mpicomm = mpicomm
 
-        options = process_kwargs(kwargs)
-
         self.database = database
-
         self.thermodynamic_states = thermodynamic_states
-        self.options = options
+        
         
         self.n_states = len(self.thermodynamic_states)
         self.n_atoms = self.thermodynamic_states[0].system.getNumParticles()        
         
         if sampler_states is not None:  # New Repex job
             self.sampler_states = sampler_states
+            
+            self.parameters = self.process_parameters(parameters)  # Fill in missing parameters with defaults
+            
+            if self.mpicomm.rank == 0:  # Store the filled-in parameter namedtuple
+                self.database.store_parameters(self.parameters)
+            
+            self.parameters = dict_to_named_tuple(self.parameters)  # Convert to namedtuple for const-ness
+            
             self._allocate_arrays()
         else:  # Resume repex job
             self._broadcast_database()
 
-        self.platform = kwargs.get("platform")  # For convenience
+        self.platform = self.parameters.platform  # For convenience
+        self.current_timestep = self.parameters.timestep
         
         self.n_replicas = len(self.thermodynamic_states)  # Determine number of replicas from the number of specified thermodynamic states.
 
@@ -61,15 +80,47 @@ class ReplicaExchange(object):
         for state in self.thermodynamic_states:
             if not state.is_compatible_with(self.thermodynamic_states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
-                
-        self.set_attributes()
         
         if self.database is not None:
             self.database.ncfile.repex_classname = self.__class__.__name__
             # Eventually, we might want to wrap a setter around the ncfile
 
         logger.debug("Initialized node %d / %d" % (self.mpicomm.rank, self.mpicomm.size))
-        citations.display_citations(self.replica_mixing_scheme, self.online_analysis)
+        citations.display_citations(self.parameters.replica_mixing_scheme, self.parameters.online_analysis)
+
+    def process_parameters(self, parameters):
+        """Process a set of input run parameters and convert to named tuple.
+        
+        Parameters
+        ----------
+        
+        parameters : dict
+            List of user-supplied run parameters.
+        
+        Returns
+        -------
+        
+        full_parameters : dict
+            Dictinoary containing user-input run parameters as well as 
+            default parameters for unspecified parameters.
+        
+        Notes
+        -----
+        
+        The default parameters are stored in the class variable `default_parameters`
+        which can be modified in subclasses.
+        """
+            
+        options = {}
+
+        for key in self.default_parameters:
+            options[key] = parameters.get(key, self.default_parameters[key])
+        
+        for key in parameters.keys():
+            if not options.has_key(key):
+                options[key] = parameters[key]
+
+        return options
 
 
     def _broadcast_database(self):
@@ -82,8 +133,9 @@ class ReplicaExchange(object):
             Nij_accepted = self.database.last_accepted
             iteration = self.database.last_iteration
             iteration += 1  # Want to begin with the NEXT step of repex
+            parameters = self.database.parameters
         else:
-            positions, replica_states, u_kl, Nij_proposed, Nij_accepted, iteration = None, None, None, None, None, None
+            positions, replica_states, u_kl, Nij_proposed, Nij_accepted, parameters, iteration = None, None, None, None, None, None, None
 
         positions = self.mpicomm.bcast(positions, root=0)
         self.replica_states = self.mpicomm.bcast(replica_states, root=0)
@@ -91,14 +143,12 @@ class ReplicaExchange(object):
         self.iteration = self.mpicomm.bcast(iteration, root=0)
         self.Nij_proposed = self.mpicomm.bcast(Nij_proposed, root=0)
         self.Nij_accepted = self.mpicomm.bcast(Nij_accepted, root=0)
-
+        
+        self.parameters = self.mpicomm.bcast(parameters, root=0)  # Send out as dictionary
+        self.parameters = dict_to_named_tuple(self.parameters)  # Convert to named_tuple for const-ness
+        
         self.sampler_states = [MCMCSamplerState(self.thermodynamic_states[k].system, positions[k]) for k in range(len(self.thermodynamic_states))]
 
-
-    def set_attributes(self):
-        for key, val in self.options.iteritems():
-            logger.debug("Setting option %s as %s" % (key, val))
-            setattr(self, key, val)
 
     def run(self):
         """
@@ -113,8 +163,8 @@ class ReplicaExchange(object):
         # Main loop
         run_start_time = time.time()              
         run_start_iteration = self.iteration
-        while (self.iteration < self.number_of_iterations):
-            logger.debug("\nIteration %d / %d" % (self.iteration + 1, self.number_of_iterations))
+        while (self.iteration < self.parameters.number_of_iterations):
+            logger.debug("\nIteration %d / %d" % (self.iteration + 1, self.parameters.number_of_iterations))
             initial_time = time.time()
 
             # Attempt replica swaps to sample from equilibrium permuation of states associated with replicas.
@@ -129,7 +179,7 @@ class ReplicaExchange(object):
             self._show_energies()
 
             # Analysis.
-            if self.online_analysis:
+            if self.parameters.online_analysis:
                 self._analysis()
 
             # Write to storage file.
@@ -138,15 +188,13 @@ class ReplicaExchange(object):
             # Increment iteration counter.
             self.iteration += 1
 
-            # Show mixing statistics.
-            if self.show_mixing_statistics:
-                self._show_mixing_statistics()
+            self._show_mixing_statistics()
 
             # Show timing statistics.
             final_time = time.time()
             elapsed_time = final_time - initial_time
-            estimated_time_remaining = (final_time - run_start_time) / (self.iteration - run_start_iteration) * (self.number_of_iterations - self.iteration)
-            estimated_total_time = (final_time - run_start_time) / (self.iteration - run_start_iteration) * (self.number_of_iterations)
+            estimated_time_remaining = (final_time - run_start_time) / (self.iteration - run_start_iteration) * (self.parameters.number_of_iterations - self.iteration)
+            estimated_total_time = (final_time - run_start_time) / (self.iteration - run_start_iteration) * (self.parameters.number_of_iterations)
             estimated_finish_time = final_time + estimated_time_remaining
             logger.debug("Iteration took %.3f s." % elapsed_time)
             logger.debug("Estimated completion in %s, at %s (consuming total wall clock time %s)." % (str(datetime.timedelta(seconds=estimated_time_remaining)), time.ctime(estimated_finish_time), str(datetime.timedelta(seconds=estimated_total_time))))
@@ -180,10 +228,7 @@ class ReplicaExchange(object):
             
             # Compute energies of all alchemical replicas
             self._compute_energies()
-            
-            # Show energies.
-            if self.show_energies:
-                self._show_energies()
+            self._show_energies()
 
             # Store initial state.
             self.output_iteration()        
@@ -223,7 +268,7 @@ class ReplicaExchange(object):
         thermodynamic_state = self.thermodynamic_states[state_index] # thermodynamic state
         sampler_state = self.sampler_states[replica_index]
         
-        sampler = mcmc.MCMCSampler(thermodynamic_state, move_set=[mcmc.LangevinDynamicsMove(nsteps=self.nsteps_per_iteration, timestep=self.timestep, collision_rate=self.collision_rate)])
+        sampler = mcmc.MCMCSampler(thermodynamic_state, move_set=[mcmc.LangevinDynamicsMove(nsteps=self.parameters.nsteps_per_iteration, timestep=self.current_timestep, collision_rate=self.parameters.collision_rate)])
         new_sampler_state = sampler.run(sampler_state)
         
         self.sampler_states[replica_index] = new_sampler_state
@@ -246,7 +291,7 @@ class ReplicaExchange(object):
         """
 
         # Propagate all replicas.
-        logger.debug("Propagating all replicas for %.3f ps..." % (self.nsteps_per_iteration * self.timestep / units.picoseconds))
+        logger.debug("Propagating all replicas for %.3f ps..." % (self.parameters.nsteps_per_iteration * self.parameters.timestep / units.picoseconds))
 
         # Run just this node's share of states.
         logger.debug("Running trajectories...")
@@ -302,7 +347,7 @@ class ReplicaExchange(object):
         end_time = time.time()
         elapsed_time = end_time - start_time
         time_per_replica = elapsed_time / float(self.n_states)
-        ns_per_day = self.timestep * self.nsteps_per_iteration / time_per_replica * 24*60*60 / units.nanoseconds
+        ns_per_day = self.parameters.timestep * self.parameters.nsteps_per_iteration / time_per_replica * 24*60*60 / units.nanoseconds
         logger.debug("Time to propagate all replicas: %.3f s (%.3f per replica, %.3f ns/day)." % (elapsed_time, time_per_replica, ns_per_day))
 
 
@@ -317,16 +362,18 @@ class ReplicaExchange(object):
         """
 
         # Minimize
-        if self.minimize:
+        if self.parameters.minimize:
             logger.debug("Minimizing all replicas...")
             self._minimize_all_replicas()
 
         # Equilibrate
-        production_timestep = self.timestep
-        for iteration in range(self.number_of_equilibration_iterations):
-            logger.debug("equilibration iteration %d / %d" % (iteration, self.number_of_equilibration_iterations))
+        self.current_timestep = self.parameters.equilibration_timestep
+        
+        for iteration in range(self.parameters.number_of_equilibration_iterations):
+            logger.debug("equilibration iteration %d / %d" % (iteration, self.parameters.number_of_equilibration_iterations))
             self._propagate_replicas()
-        self.timestep = production_timestep
+        
+        self.current_timestep = self.parameters.timestep
 
 
     def _compute_energies(self):
@@ -547,19 +594,19 @@ class ReplicaExchange(object):
 
         # Perform swap attempts according to requested scheme.
         start_time = time.time()                    
-        if self.replica_mixing_scheme == 'swap-neighbors':
+        if self.parameters.replica_mixing_scheme == 'swap-neighbors':
             self._mix_neighboring_replicas()        
-        elif self.replica_mixing_scheme == 'swap-all':
+        elif self.parameters.replica_mixing_scheme == 'swap-all':
             # Try to use weave-accelerated mixing code if possible, otherwise fall back to Python-accelerated code.            
             try:
                 self._mix_all_replicas_weave()            
             except:
                 self._mix_all_replicas()
-        elif self.replica_mixing_scheme == 'none':
+        elif self.parameters.replica_mixing_scheme == 'none':
             # Don't mix replicas.
             pass
         else:
-            raise ValueError("Replica mixing scheme '%s' unknown.  Choose valid 'replica_mixing_scheme' parameter." % self.replica_mixing_scheme)
+            raise ValueError("Replica mixing scheme '%s' unknown.  Choose valid 'replica_mixing_scheme' parameter." % self.parameters.replica_mixing_scheme)
         end_time = time.time()
 
         # Determine fraction of swaps accepted this iteration.        
@@ -633,7 +680,7 @@ class ReplicaExchange(object):
         """
 
         # Only root node can print.
-        if self.mpicomm.rank != 0:
+        if self.mpicomm.rank != 0 or not self.parameters.show_mixing_statistics:
             return
 
         # Don't print anything until we've accumulated some statistics.
@@ -648,9 +695,8 @@ class ReplicaExchange(object):
 
         Tij = self._accumulate_mixing_statistics()
 
-        if self.show_mixing_statistics:
-            P = pd.DataFrame(Tij)
-            logger.info("\nCumulative symmetrized state mixing transition matrix:\n%s" % P.to_string())
+        P = pd.DataFrame(Tij)
+        logger.info("\nCumulative symmetrized state mixing transition matrix:\n%s" % P.to_string())
 
         # Estimate second eigenvalue and equilibration time.
         mu = np.linalg.eigvals(Tij)
@@ -725,14 +771,14 @@ class ReplicaExchange(object):
     def _show_energies(self):
         """Show energies (in units of kT) for all replicas at all states.
         """
-        if self.mpicomm.rank != 0:
+        if self.mpicomm.rank != 0 or not self.parameters.show_energies:
             return
 
         U = pd.DataFrame(self.u_kl)
         logger.info("\n%-24s %16s\n%s" % ("reduced potential (kT)", "current state", U.to_string()))
 
     @classmethod
-    def create(cls, thermodynamic_states, coordinates, filename, mpicomm=None, **kwargs):
+    def create(cls, thermodynamic_states, coordinates, filename, mpicomm=None, parameters={}):
         """Create a new ReplicaExchange simulation.
         
         Parameters
@@ -751,14 +797,14 @@ class ReplicaExchange(object):
             
         """    
         if mpicomm is None or (mpicomm.rank == 0):
-            database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates, **kwargs)  # To do: eventually use factory for looking up database type via filename
+            database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates)  # To do: eventually use factory for looking up database type via filename
         else:
             database = None
 
 
         sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]        
         
-        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, parameters=parameters)
         repex._run_iteration_zero()
         return repex
     
@@ -773,8 +819,6 @@ def resume(filename, mpicomm=None):
         name of NetCDF file to bind to for simulation output and checkpointing
     mpicomm : mpi4py communicator, default=None
         MPI communicator, if parallel execution is desired.      
-    kwargs (dict) - Optional parameters to use for specifying simulation
-        Provided keywords will be matched to object variables to replace defaults.
         
     Notes
     -----
@@ -793,13 +837,15 @@ def resume(filename, mpicomm=None):
     if mpicomm.rank == 0:
         database = netcdf_io.NetCDFDatabase(filename)  # To do: eventually use factory for looking up database type via filename
         thermodynamic_states, repex_classname = database.thermodynamic_states, database.repex_classname
+        parameters = database.parameters
     else:
-        database, thermodynamic_states, repex_classname = None, None, None
+        database, thermodynamic_states, repex_classname, parameters = None, None, None, None
 
     thermodynamic_states = mpicomm.bcast(thermodynamic_states, root=0)
     repex_classname = mpicomm.bcast(repex_classname, root=0)
+    parameters = mpicomm.bcast(parameters, root=0)
     
     cls = find_matching_subclass(ReplicaExchange, repex_classname)
     
-    repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm)
+    repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm, parameters=parameters)
     return repex

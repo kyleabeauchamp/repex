@@ -29,8 +29,8 @@ def test_harmonic_oscillators():
     coordinates = [positions] * n_replicas
 
     mpicomm = dummympi.DummyMPIComm()
-    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
-    replica_exchange.number_of_iterations = 1000
+    parameters = {"number_of_iterations":1000}
+    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
 
     u_permuted = replica_exchange.database.ncfile.variables["energies"][:]
@@ -62,12 +62,12 @@ def test_harmonic_oscillators_save_and_load():
     coordinates = [positions] * n_replicas
 
     mpicomm = dummympi.DummyMPIComm()
-    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
-    replica_exchange.number_of_iterations = 200
+    parameters = {"number_of_iterations":200}
+    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
     
-    
+    replica_exchange.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 300  # Hacky way to modify database.  Maybe add setter?
+
     replica_exchange = resume(nc_filename, mpicomm=mpicomm)
     eq(replica_exchange.iteration, 200)
-    replica_exchange.number_of_iterations = 300
     replica_exchange.run()

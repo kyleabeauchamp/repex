@@ -1,5 +1,3 @@
-#!/usr/local/bin/env python
-
 """
 Module to generate Systems and positions for simple reference molecular systems for testing.
 
@@ -46,16 +44,12 @@ TODO
 
 """
 
-import os
-import os.path
-import sys
 import numpy as np
 import numpy.random
 import math
 import copy
 import scipy.special
 
-import simtk
 import simtk.openmm as mm
 import simtk.unit as units
 import simtk.openmm.app as app
@@ -2029,11 +2023,3 @@ class AMOEBAProteinBox(TestSystem):
         positions = pdbfile.getPositions()
         
         self.system, self.positions = system, positions
-
-#=============================================================================================
-# MAIN AND TESTS
-#=============================================================================================
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod(verbose=True)

@@ -43,11 +43,10 @@ def test_parallel_tempering(mpicomm):
 
     coordinates = [positions] * n_temps
 
-    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
+    parameters = {"number_of_iterations":1000}
+    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, parameters=parameters)
     
     eq(replica_exchange.n_replicas, n_temps)
-
-    replica_exchange.number_of_iterations = 1000
     replica_exchange.run()
 
     u_permuted = replica_exchange.database.ncfile.variables["energies"][:]
@@ -79,13 +78,15 @@ def test_parallel_tempering_save_and_load(mpicomm):
 
     coordinates = [positions] * n_temps
     
-    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
-    replica_exchange.number_of_iterations = 200
+    parameters = {"number_of_iterations":200}
+    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
+    
+    if mpicomm.rank == 0:
+        replica_exchange.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 300  # Hacky way to modify database.  Maybe add setter?
     
     replica_exchange = resume(nc_filename, mpicomm=mpicomm)
     eq(replica_exchange.iteration, 200)
-    replica_exchange.number_of_iterations = 300
     replica_exchange.run()
 
 @mpitest(2)
@@ -104,8 +105,8 @@ def test_parallel_tempering_explicit_temperature_input(mpicomm):
 
     coordinates = [positions] * n_temps
 
-    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, temperatures=temperatures, mpicomm=mpicomm, **{})
-    replica_exchange.number_of_iterations = 100
+    parameters = {"number_of_iterations":100}
+    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, temperatures=temperatures, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
     
     eq(replica_exchange.n_replicas, n_temps)

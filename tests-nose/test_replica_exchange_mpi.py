@@ -43,9 +43,8 @@ def test_harmonic_oscillators(mpicomm):
     states = [ ThermodynamicState(system=system, temperature=T_i[i]) for i in range(n_replicas) ]
 
     coordinates = [positions] * n_replicas
-
-    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
-    replica_exchange.number_of_iterations = 1000
+    parameters = {"number_of_iterations":1000}
+    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
 
     u_permuted = replica_exchange.database.ncfile.variables["energies"][:]
@@ -76,11 +75,12 @@ def test_harmonic_oscillators_save_and_load(mpicomm):
     states = [ ThermodynamicState(system=system, temperature=T_i[i]) for i in range(n_replicas) ]
 
     coordinates = [positions] * n_replicas
-
-    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
-    replica_exchange.number_of_iterations = 50
+    parameters = {"number_of_iterations":50}
+    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
+    
+    if mpicomm.rank == 0:
+        replica_exchange.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 100  # Hacky way to modify database.  Maybe add setter?
 
-    replica_exchange = resume(nc_filename, mpicomm=mpicomm)
-    replica_exchange.number_of_iterations = 100
+    replica_exchange = resume(nc_filename, mpicomm=mpicomm)    
     replica_exchange.run()

@@ -47,8 +47,8 @@ def test_power_oscillators(mpicomm):
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
 
-    replica_exchange = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, mpicomm=mpicomm, **{})
-    replica_exchange.number_of_iterations = 2000
+    parameters = {"number_of_iterations":2000}
+    replica_exchange = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
 
     u_permuted = replica_exchange.database.ncfile.variables["energies"][:]
@@ -83,12 +83,13 @@ def test_hrex_save_and_load(mpicomm):
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
 
-    replica_exchange = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, mpicomm=mpicomm, **{})
-    replica_exchange.number_of_iterations = 200
+    parameters = {"number_of_iterations":200}
+    replica_exchange = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
 
+    if mpicomm.rank == 0:
+        replica_exchange.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 300  # Hacky way to modify database.  Maybe add setter?
     
     replica_exchange = resume(nc_filename, mpicomm=mpicomm)
     eq(replica_exchange.iteration, 200)
-    replica_exchange.number_of_iterations = 300
     replica_exchange.run()
