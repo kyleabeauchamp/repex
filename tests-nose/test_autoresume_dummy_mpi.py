@@ -28,7 +28,7 @@ def test_hrex_save_and_load():
     rex = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, parameters=parameters)
     rex.run()
 
-    rex.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 10  # Hacky way to modify database.  Maybe add setter?    
+    rex.extend(5)
     
     rex = resume(nc_filename)
     rex.run()
@@ -57,7 +57,7 @@ def test_repex_save_and_load():
     rex = replica_exchange.ReplicaExchange.create(states, coordinates, nc_filename, parameters=parameters)
     rex.run()
     
-    rex.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 10  # Hacky way to modify database.  Maybe add setter?        
+    rex.extend(5)
     
     rex = resume(nc_filename)
     rex.run()
@@ -85,7 +85,7 @@ def test_parallel_tempering_save_and_load():
     rex = parallel_tempering.ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, parameters=parameters)
     rex.run()
     
-    rex.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 10  # Hacky way to modify database.  Maybe add setter?        
+    rex.extend(5)
     
     rex = resume(nc_filename)
     rex.run()

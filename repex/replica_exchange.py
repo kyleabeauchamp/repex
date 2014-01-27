@@ -66,6 +66,7 @@ class ReplicaExchange(object):
                 self.database.store_parameters(self.parameters)
             
             self.parameters = dict_to_named_tuple(self.parameters)  # Convert to namedtuple for const-ness
+            self._check_run_parameter_consistency()
             
             self._allocate_arrays()
         else:  # Resume repex job
@@ -122,6 +123,42 @@ class ReplicaExchange(object):
 
         return options
 
+    def extend(self, n_iter):
+        """Extend an existing repex run and modify its database.
+        
+        Parameters
+        ----------
+        
+        n_iter : int
+            How many repex iterations to append.
+        
+        Notes
+        -----
+        
+        This function is MPI aware and only makes database changes on the root 
+        node.
+        
+        """
+        value = self.parameters.number_of_iterations + n_iter
+        if self.mpicomm.rank == 0:
+            self.database._store_parameter("number_of_iterations", value)
+            self.database.sync()
+        
+        self.parameters = self.parameters._asdict()  # Make dict for mutability
+        self.parameters["number_of_iterations"] = value  # extend
+        self.parameters = dict_to_named_tuple(self.parameters)  # Convert to namedtuple for const-ness
+
+
+    def _check_run_parameter_consistency(self):
+        """Check stored run parameters for self consistency.
+        
+        Notes
+        -----
+        
+        To be implemented!
+        """
+        pass
+
 
     def _broadcast_database(self):
         """Load the positions, replica_states, u_kl, proposed, and accepted from root node database."""
@@ -146,6 +183,7 @@ class ReplicaExchange(object):
         
         self.parameters = self.mpicomm.bcast(parameters, root=0)  # Send out as dictionary
         self.parameters = dict_to_named_tuple(self.parameters)  # Convert to named_tuple for const-ness
+        self._check_run_parameter_consistency()
         
         self.sampler_states = [MCMCSamplerState(self.thermodynamic_states[k].system, positions[k]) for k in range(len(self.thermodynamic_states))]
 

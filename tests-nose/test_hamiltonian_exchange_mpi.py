@@ -87,8 +87,7 @@ def test_hrex_save_and_load(mpicomm):
     replica_exchange = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
 
-    if mpicomm.rank == 0:
-        replica_exchange.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 300  # Hacky way to modify database.  Maybe add setter?
+    replica_exchange.extend(100)
     
     replica_exchange = resume(nc_filename, mpicomm=mpicomm)
     eq(replica_exchange.iteration, 200)

@@ -79,8 +79,7 @@ def test_harmonic_oscillators_save_and_load(mpicomm):
     replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, parameters=parameters)
     replica_exchange.run()
     
-    if mpicomm.rank == 0:
-        replica_exchange.database.ncfile.groups["options"].variables["number_of_iterations"][0] = 100  # Hacky way to modify database.  Maybe add setter?
+    rex.extend(50)
 
     replica_exchange = resume(nc_filename, mpicomm=mpicomm)    
     replica_exchange.run()

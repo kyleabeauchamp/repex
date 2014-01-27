@@ -37,7 +37,7 @@ def test_hrex_multiple_save_and_load():
         Nij_accepted0 = rex.Nij_accepted
         sampler_states0 = rex.sampler_states
 
-        rex.database.ncfile.groups["options"].variables["number_of_iterations"][0] += steps  # Hacky way to modify database.
+        rex.extend(steps)
 
         rex = resume(nc_filename)
         replica_states1 = rex.replica_states
@@ -79,7 +79,7 @@ def test_repex_multiple_save_and_load():
         Nij_accepted0 = rex.Nij_accepted
         sampler_states0 = rex.sampler_states
 
-        rex.database.ncfile.groups["options"].variables["number_of_iterations"][0] += steps  # Hacky way to modify database.
+        rex.extend(steps)
         
         rex = resume(nc_filename)
         replica_states1 = rex.replica_states
@@ -119,7 +119,7 @@ def test_parallel_tempering_multiple_save_and_load():
         Nij_accepted0 = rex.Nij_accepted
         sampler_states0 = rex.sampler_states
 
-        rex.database.ncfile.groups["options"].variables["number_of_iterations"][0] += steps  # Hacky way to modify database.
+        rex.extend(steps)
 
         rex = resume(nc_filename)
         replica_states1 = rex.replica_states

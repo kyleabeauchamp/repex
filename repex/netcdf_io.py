@@ -274,12 +274,18 @@ class NetCDFDatabase(object):
         # Store the variable.
         logger.debug("Storing option: %s -> %s (type: %s)" % (option_name, option_value, str(option_type)))
         if type(option_value) == str:
-            ncvar = self.ncfile.groups['options'].createVariable(option_name, type(option_value), 'scalar')
+            if option_name in self.ncfile.groups['options'].variables:
+                ncvar = self.ncfile.groups['options'].variables[option_name]
+            else:
+                ncvar = self.ncfile.groups['options'].createVariable(option_name, type(option_value), 'scalar')
             packed_data = np.empty(1, 'O')
             packed_data[0] = option_value
             ncvar[:] = packed_data
         else:
-            ncvar = self.ncfile.groups['options'].createVariable(option_name, type(option_value))
+            if option_name in self.ncfile.groups['options'].variables:
+                ncvar = self.ncfile.groups['options'].variables[option_name]
+            else:
+                ncvar = self.ncfile.groups['options'].createVariable(option_name, type(option_value))
             ncvar.assignValue(option_value)
         if option_unit: setattr(ncvar, 'units', str(option_unit))
         setattr(ncvar, 'type', option_type.__name__)
