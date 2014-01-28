@@ -42,13 +42,13 @@ def test_hrex_save_and_load(mpicomm):
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
 
-    rex = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, mpicomm=mpicomm, **{})
-    rex.number_of_iterations = 5
+    parameters = {"number_of_iterations":5}
+    rex = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, mpicomm=mpicomm, parameters=parameters)
     rex.run()
 
+    rex.extend(5)
     
     rex = resume(nc_filename, mpicomm=mpicomm)
-    rex.number_of_iterations = 10
     rex.run()
 
     eq(rex.__class__.__name__, "HamiltonianExchange")
@@ -71,12 +71,13 @@ def test_repex_save_and_load(mpicomm):
 
     coordinates = [positions] * n_replicas
 
-    rex = replica_exchange.ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, **{})
-    rex.number_of_iterations = 5
+    parameters = {"number_of_iterations":5}
+    rex = replica_exchange.ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, parameters=parameters)
     rex.run()
     
+    rex.extend(5)    
+    
     rex = resume(nc_filename, mpicomm=mpicomm)
-    rex.number_of_iterations = 10
     rex.run()
 
     eq(rex.__class__.__name__, "ReplicaExchange")
@@ -98,12 +99,13 @@ def test_parallel_tempering_save_and_load(mpicomm):
 
     coordinates = [positions] * n_temps
     
-    rex = parallel_tempering.ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
-    rex.number_of_iterations = 5
+    parameters = {"number_of_iterations":5}
+    rex = parallel_tempering.ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, parameters=parameters)
     rex.run()
     
+    rex.extend(5)    
+
     rex = resume(nc_filename, mpicomm=mpicomm)
-    rex.number_of_iterations = 10
     rex.run()
     
     eq(rex.__class__.__name__, "ParallelTempering")

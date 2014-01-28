@@ -1,5 +1,3 @@
-#!/usr/local/bin/env python
-
 #=============================================================================================
 # MODULE DOCSTRING
 #=============================================================================================
@@ -36,25 +34,15 @@ this program.  If not, see <http://www.gnu.org/licenses/>.
 # GLOBAL IMPORTS
 #=============================================================================================
 
-import sys
-import math
-import doctest
 import numpy
-import time
 
 import simtk.unit
 
 import simtk.unit as units
 import simtk.openmm as mm
-from simtk.openmm import app
 
-from repex import testsystems
+from repex.utils import kB
 
-#=============================================================================================
-# CONSTANTS
-#=============================================================================================
-
-kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 
 #=============================================================================================
 # INTEGRATORS
@@ -351,7 +339,7 @@ def HMCIntegrator(temperature=298.0*simtk.unit.kelvin, nsteps=10, timestep=1*sim
     integrator.addGlobalVariable("naccept", 0) # number accepted
     integrator.addGlobalVariable("ntrials", 0) # number of Metropolization trials
 
-    integrator.addGlobalVariable("kT", kB*temperature) # thermal energy
+    integrator.addGlobalVariable("kT", kT) # thermal energy
     integrator.addPerDofVariable("sigma", 0) 
     integrator.addGlobalVariable("ke", 0) # kinetic energy
     integrator.addPerDofVariable("xold", 0) # old positions
@@ -469,7 +457,7 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     #
     # Integrator initialization.
     #
-    integrator.addGlobalVariable("kT", kB*temperature) # thermal energy
+    integrator.addGlobalVariable("kT", kT) # thermal energy
     integrator.addGlobalVariable("b", numpy.exp(-gamma*timestep)) # velocity mixing parameter
     integrator.addPerDofVariable("sigma", 0) 
     integrator.addGlobalVariable("ke", 0) # kinetic energy
@@ -638,11 +626,3 @@ def VVVRIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
 
     return integrator
     
-#=============================================================================================
-# MAIN AND TESTS
-#=============================================================================================
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
-

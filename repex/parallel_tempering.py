@@ -1,19 +1,6 @@
-#!/usr/local/bin/env python
-
-import os
-import sys
-import math
-import copy
 import time
-import datetime
 
 import numpy as np
-import numpy.linalg
-
-import simtk.openmm as mm
-import simtk.unit as units
-
-import netCDF4 as netcdf # netcdf4-python is used in place of scipy.io.netcdf for now
 
 from thermodynamics import ThermodynamicState
 from replica_exchange import ReplicaExchange
@@ -24,9 +11,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 from constants import kB
-
-kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
-
 
 
 class ParallelTempering(ReplicaExchange):
@@ -47,9 +31,9 @@ class ParallelTempering(ReplicaExchange):
     
     """
 
-    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, **kwargs):
+    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, parameters={}):
         self._check_self_consistency(thermodynamic_states)
-        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states=sampler_states, database=database, mpicomm=mpicomm, **kwargs)
+        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states=sampler_states, database=database, mpicomm=mpicomm, parameters=parameters)
 
     def _check_self_consistency(self, thermodynamic_states):
         """Checks that each state is identical except for the temperature, as required for ParallelTempering."""
@@ -106,7 +90,7 @@ class ParallelTempering(ReplicaExchange):
 
 
     @classmethod
-    def create(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, **kwargs):
+    def create(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, parameters={}):
         """Create a new ParallelTempering simulation.
         
         Parameters
@@ -130,7 +114,7 @@ class ParallelTempering(ReplicaExchange):
             If specified, perform NPT simulation at this temperature.
         mpicomm : mpi4py communicator, default=None
             MPI communicator, if parallel execution is desired.      
-        kwargs (dict) - Optional parameters to use for specifying simulation
+        parameters (dict) - Optional parameters to use for specifying simulation
             Provided keywords will be matched to object variables to replace defaults.
             
         Notes
@@ -148,26 +132,22 @@ class ParallelTempering(ReplicaExchange):
             logger.info("Using provided temperatures")
             n_temps = len(temperatures)
         elif (T_min is not None) and (T_max is not None) and (n_temps is not None):
-            temperatures = [ T_min + (T_max - T_min) * (np.exp(float(i) / float(n_temps-1)) - 1.0) / (math.e - 1.0) for i in range(n_temps) ]
+            temperatures = [ T_min + (T_max - T_min) * (np.exp(float(i) / float(n_temps-1)) - 1.0) / (np.e - 1.0) for i in range(n_temps) ]
         else:
             raise ValueError("Either 'temperatures' or 'T_min', 'T_max', and 'n_temps' must be provided.")
 
         thermodynamic_states = [ ThermodynamicState(system=system, temperature=temperatures[i], pressure=pressure) for i in range(n_temps) ]
     
         if mpicomm is None or (mpicomm.rank == 0):
-            database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates, **kwargs)  # To do: eventually use factory for looking up database type via filename
+            database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates)  # To do: eventually use factory for looking up database type via filename
         else:
             database = None
         
         
         sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
-        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, **kwargs)
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, parameters=parameters)
         # Override title.
         repex.title = 'Parallel tempering simulation created using ParallelTempering class of repex.py on %s' % time.asctime(time.localtime())        
 
         repex._run_iteration_zero()
         return repex
-        
-
-
-        

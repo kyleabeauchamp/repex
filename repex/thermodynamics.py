@@ -1,5 +1,3 @@
-#!/usr/local/bin/env python
-
 #=============================================================================================
 # MODULE DOCSTRING
 #=============================================================================================
@@ -31,7 +29,6 @@ COPYRIGHT
 
 import copy
 import numpy as np
-import numpy.linalg
 
 import simtk.openmm as mm
 import simtk.unit as units
@@ -270,7 +267,7 @@ class ThermodynamicState(object):
 
         # If pressure is specified, ensure box vectors have been provided.
         if (self.pressure is not None) and (box_vectors is None):
-            raise ParameterException("box_vectors must be specified if constant-pressure ensemble.")
+            raise ValueError("box_vectors must be specified if constant-pressure ensemble.")
 
         # Make sure we have Context and Integrator objects.
         self._create_context(platform)
@@ -372,7 +369,7 @@ class ThermodynamicState(object):
 
         # If pressure is specified, ensure box vectors have been provided.
         if (self.pressure is not None) and (box_vectors_list is None):
-            raise ParameterException("box_vectors must be specified if constant-pressure ensemble.")
+            raise ValueError("box_vectors must be specified if constant-pressure ensemble.")
 
         # Make sure we have Context and Integrator objects.
         self._create_context(platform)
@@ -485,7 +482,7 @@ class ThermodynamicState(object):
     def __str__(self):
         # TODO: Write a human-readable representation.
         
-        return repr(r)
+        return repr(self)
 
 def volume(box_vectors):
     """Return the volume of the current configuration.
@@ -520,11 +517,3 @@ def volume(box_vectors):
     A = np.array([a/a.unit, b/a.unit, c/a.unit])
     volume = np.linalg.det(A) * a.unit**3
     return volume
-
-#=============================================================================================
-# MAIN AND TESTS
-#=============================================================================================
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()

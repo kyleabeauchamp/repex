@@ -1,5 +1,3 @@
-#!/usr/local/bin/env python
-
 #=============================================================================================
 # MODULE DOCSTRING
 #=============================================================================================
@@ -77,13 +75,10 @@ TODO
 # GLOBAL IMPORTS
 #=============================================================================================
 
-import os
-import math
 import copy
 import time
 
 import numpy as np
-import numpy.random
 
 import simtk
 import simtk.openmm as mm
@@ -93,6 +88,9 @@ from repex import integrators
 from repex import thermodynamics
 
 from abc import abstractmethod 
+
+import logging
+logger = logging.getLogger(__name__)
 
 #=============================================================================================
 # MODULE CONSTANTS
@@ -762,6 +760,7 @@ class LangevinDynamicsMove(MCMCMove):
         context_initial_time = time.time()
         context = sampler_state.createContext(integrator, platform=platform)
         context_final_time = time.time()
+        logger.debug("LangevinDynamicMove: Context created, platform is %s" % context.getPlatform().getName())
 
         # Set pressure, if barostat is included.
         if barostat is not None:

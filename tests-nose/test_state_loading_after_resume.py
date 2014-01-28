@@ -27,9 +27,8 @@ def test_hrex_multiple_save_and_load():
 
     state = ThermodynamicState(system=systems[0], temperature=temperature)
     
-    rex = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, **{})
-    rex.number_of_iterations = steps
-        
+    parameters = {"number_of_iterations":steps}
+    rex = hamiltonian_exchange.HamiltonianExchange.create(state, systems, positions, nc_filename, parameters=parameters)
     rex.run()
 
     for repeat in range(repeats):
@@ -37,6 +36,8 @@ def test_hrex_multiple_save_and_load():
         Nij_proposed0 = rex.Nij_proposed
         Nij_accepted0 = rex.Nij_accepted
         sampler_states0 = rex.sampler_states
+
+        rex.extend(steps)
 
         rex = resume(nc_filename)
         replica_states1 = rex.replica_states
@@ -47,8 +48,7 @@ def test_hrex_multiple_save_and_load():
         eq(replica_states0, replica_states1)
         eq(Nij_proposed0, Nij_proposed1)
         eq(Nij_accepted0, Nij_accepted1)
-        
-        rex.number_of_iterations += steps
+
         rex.run()
 
 
@@ -68,9 +68,9 @@ def test_repex_multiple_save_and_load():
     states = [ ThermodynamicState(system=system, temperature=T_i[i]) for i in range(n_replicas) ]
 
     coordinates = [positions] * n_replicas
-
-    rex = replica_exchange.ReplicaExchange.create(states, coordinates, nc_filename, **{})
-    rex.number_of_iterations = steps
+    
+    parameters = {"number_of_iterations":steps}
+    rex = replica_exchange.ReplicaExchange.create(states, coordinates, nc_filename, parameters=parameters)
     rex.run()
     
     for repeat in range(repeats):
@@ -79,6 +79,8 @@ def test_repex_multiple_save_and_load():
         Nij_accepted0 = rex.Nij_accepted
         sampler_states0 = rex.sampler_states
 
+        rex.extend(steps)
+        
         rex = resume(nc_filename)
         replica_states1 = rex.replica_states
         Nij_proposed1 = rex.Nij_proposed
@@ -89,7 +91,6 @@ def test_repex_multiple_save_and_load():
         eq(Nij_proposed0, Nij_proposed1)
         eq(Nij_accepted0, Nij_accepted1)
         
-        rex.number_of_iterations += steps
         rex.run()
 
 
@@ -108,8 +109,8 @@ def test_parallel_tempering_multiple_save_and_load():
 
     coordinates = [positions] * n_temps
     
-    rex = parallel_tempering.ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, **{})
-    rex.number_of_iterations = steps
+    parameters = {"number_of_iterations":steps}
+    rex = parallel_tempering.ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, parameters=parameters)
     rex.run()
     
     for repeat in range(repeats):
@@ -117,6 +118,8 @@ def test_parallel_tempering_multiple_save_and_load():
         Nij_proposed0 = rex.Nij_proposed
         Nij_accepted0 = rex.Nij_accepted
         sampler_states0 = rex.sampler_states
+
+        rex.extend(steps)
 
         rex = resume(nc_filename)
         replica_states1 = rex.replica_states
@@ -127,6 +130,5 @@ def test_parallel_tempering_multiple_save_and_load():
         eq(replica_states0, replica_states1)
         eq(Nij_proposed0, Nij_proposed1)
         eq(Nij_accepted0, Nij_accepted1)
-        
-        rex.number_of_iterations += steps
+
         rex.run()

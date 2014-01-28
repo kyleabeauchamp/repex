@@ -1,5 +1,3 @@
-#!/usr/local/bin/env python
-
 """
 Module to generate Systems and positions for simple reference molecular systems for testing.
 
@@ -46,16 +44,12 @@ TODO
 
 """
 
-import os
-import os.path
-import sys
 import numpy as np
 import numpy.random
 import math
 import copy
 import scipy.special
 
-import simtk
 import simtk.openmm as mm
 import simtk.unit as units
 import simtk.openmm.app as app
@@ -2004,11 +1998,38 @@ class CustomGBForceSystem(TestSystem):
 
         self.system, self.positions = system, positions
 
-    
-#=============================================================================================
-# MAIN AND TESTS
-#=============================================================================================
+class AMOEBAIonBox(TestSystem):
+    """A single Ca2 ion in a water box.
 
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod(verbose=True)
+    >>> testsystem = AMOEBAIonBox()
+    >>> system, positions = testsystem.system, testsystem.positions
+    
+    """
+    def __init__(self):
+        pdb_filename = get_data_filename("data/amoeba/ion-in-water.pdb")
+        pdbfile = app.PDBFile(pdb_filename)
+
+        ff =  app.ForceField("amoeba2009.xml")
+        system = ff.createSystem(pdbfile.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+
+        positions = pdbfile.getPositions()
+        
+        self.system, self.positions = system, positions
+
+class AMOEBAProteinBox(TestSystem):
+    """PDB 1AP4 in water box.
+
+    >>> testsystem = AMOEBAProteinBox()
+    >>> system, positions = testsystem.system, testsystem.positions    
+
+    """
+    def __init__(self):
+        pdb_filename = get_data_filename("data/amoeba/1AP4_14_wat.pdb")
+        pdbfile = app.PDBFile(pdb_filename)
+
+        ff =  app.ForceField("amoeba2009.xml")
+        system = ff.createSystem(pdbfile.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+
+        positions = pdbfile.getPositions()
+        
+        self.system, self.positions = system, positions

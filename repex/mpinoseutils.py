@@ -3,6 +3,7 @@ import sys
 import contextlib
 import functools
 import inspect
+import os
 
 from mpi4py import MPI
 import numpy as np
@@ -91,7 +92,6 @@ class MpiWorkers:
     def __init__(self, max_nprocs):
         import subprocess
         import sys
-        import os
         import zmq
 
         # Since the output terminals are used for lots of debug output etc., we use
@@ -124,7 +124,7 @@ class MpiWorkers:
 def _mpi_worker(addr):
     import importlib
     import zmq
-    from cPickle import loads, dumps
+    from cPickle import loads
 
     rank = MPI.COMM_WORLD.Get_rank()
     if rank == 0:
@@ -189,11 +189,9 @@ def mpitest(nprocs):
 
         @functools.wraps(func)
         def replacement_func(_return_status=False):
-            from cPickle import dumps
             
             n = MPI.COMM_WORLD.Get_size()
             rank = MPI.COMM_WORLD.Get_rank()
-            import os
             if n == 1:
                 # spawn workers for module if not done already
                 mpi_workers = getattr(mod, 'mpi_workers', None)
@@ -252,5 +250,3 @@ def mpitest(nprocs):
 
         return replacement_func
     return dec
-
-

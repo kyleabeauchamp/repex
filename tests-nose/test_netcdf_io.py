@@ -28,11 +28,11 @@ def test_double_set_thermodynamic_states():
     coordinates = [positions] * n_temps
 
     mpicomm = dummympi.DummyMPIComm()
-    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, **{})
+    parameters = {"number_of_iterations":3}
+    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, parameters=parameters)
     
     eq(replica_exchange.n_replicas, n_temps)
 
-    replica_exchange.number_of_iterations = 3
     replica_exchange.run()
 
     states = replica_exchange.thermodynamic_states

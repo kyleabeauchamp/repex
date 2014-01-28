@@ -1,17 +1,13 @@
-#!/usr/bin/env python
-
 import os
-import time
 
 import numpy as np
 
-import simtk.openmm as mm
 import simtk.unit as units
 
 import netCDF4 as netcdf
 
 from thermodynamics import ThermodynamicState
-from utils import process_kwargs, fix_coordinates, str_to_system
+from utils import str_to_system, dict_to_named_tuple
 from version import version as __version__
 
 import logging
@@ -19,9 +15,22 @@ logger = logging.getLogger(__name__)
 
 
 class NetCDFDatabase(object):
-    options_to_store = ['collision_rate', 'constraint_tolerance', 'timestep', 'nsteps_per_iteration', 'number_of_iterations', 'equilibration_timestep', 'number_of_equilibration_iterations', 'title', 'minimize', 'replica_mixing_scheme', 'online_analysis', 'show_mixing_statistics']
-
-    def __init__(self, filename, thermodynamic_states=None, positions=None, **kwargs):
+    """A netCDF based database for Repex simulations.
+    
+    
+    Parameters
+    ----------
+    filename : str
+        The filename of the database.  Use ".nc" as the suffix.
+    thermodynamic_states : list(ThermodynamicState), default=None
+        A list of thermodynamic states for the replica exchange run.  
+        These will be saved to disk.  If None, will be loaded from disk.
+    positions : list(simtk.unit)
+        A list of coordinates for each repex slot.  If None, will be 
+        loaded from disk.
+    
+    """
+    def __init__(self, filename, thermodynamic_states=None, positions=None):
 
         # Check if netcdf file exists.
         resume = os.path.exists(filename) and (os.path.getsize(filename) > 0)
@@ -40,11 +49,9 @@ class NetCDFDatabase(object):
         
         if resume:
             logger.info("Attempting to resume by reading thermodynamic states and options...")
-            self.options = self._load_options()
+            self.parameters = self._load_parameters()
         else:
             self._initialize_netcdf(thermodynamic_states, positions)
-            self.options = process_kwargs(kwargs)
-            self._store_options()
 
         # Check to make sure all states have the same number of atoms and are in the same thermodynamic ensemble.
         for state in self.thermodynamic_states:
@@ -53,7 +60,18 @@ class NetCDFDatabase(object):
 
 
     def _initialize_netcdf(self, thermodynamic_states, positions):
-        """Initialize NetCDF file for storage.
+        """Initialize NetCDF file for storage by allocating arrays on disk.
+        
+        Parameters
+        ----------
+
+        thermodynamic_states : list(ThermodynamicState), default=None
+            A list of thermodynamic states for the replica exchange run.  
+            These will be saved to disk.  If None, will be loaded from disk.
+        positions : list(simtk.unit)
+            A list of coordinates for each repex slot.  If None, will be 
+            loaded from disk.
+        
         """
         
         n_replicas = len(thermodynamic_states)
@@ -193,7 +211,7 @@ class NetCDFDatabase(object):
             ncvar_temperatures = ncgrp_stateinfo.createVariable('pressures', 'f', ('replica',))
             ncvar_temperatures.units = 'atm'
             ncvar_temperatures.long_name = "pressures[state] is the external pressure of thermodynamic state 'state'"
-            for state_index in range(n_states):
+            for state_index in range(self.n_states):
                 ncvar_temperatures[state_index] = thermodynamic_states[state_index].pressure / units.atmospheres
 
         # TODO: Store other thermodynamic variables store in ThermodynamicState?  Generalize?
@@ -208,8 +226,22 @@ class NetCDFDatabase(object):
             ncvar_serialized_states[state_index] = serialized
 
 
-    def _store_options(self):
+    def store_parameters(self, parameters):
         """Store run parameters in NetCDF file.
+        
+        Parameters
+        ----------
+        parameters : dict
+            A dict containing ALL run parameters
+            
+        Notes
+        -----
+        
+        The user supplies a dictionary of run parameters to Repex.  
+        Repex (or a subclass) then fills in any missing parameters.  
+        This dictionary is the correct input here.  Eventually, this dictionary
+        will be converted to a namedtuple, at which point it is immutable.  
+        
         """
 
         logger.debug("Storing run parameters in NetCDF file...")
@@ -221,58 +253,55 @@ class NetCDFDatabase(object):
         # Create a group to store state information.
         ncgrp_options = self.ncfile.createGroup('options')
 
-        # Store run parameters.
-        for option_name in self.options_to_store:
-            # Get option value.
-            #option_value = getattr(self, option_name)
-            option_value = self.options.get(option_name)
-            # If Quantity, strip off units first.
-            option_unit = None
-            if type(option_value) == units.Quantity:
-                option_unit = option_value.unit
-                option_value = option_value / option_unit
-            # Store the Python type.
-            option_type = type(option_value)
-            # Handle booleans
-            if type(option_value) == bool:
-                option_value = int(option_value)
-            # Store the variable.
-            logger.debug("Storing option: %s -> %s (type: %s)" % (option_name, option_value, str(option_type)))
-            if type(option_value) == str:
-                ncvar = ncgrp_options.createVariable(option_name, type(option_value), 'scalar')
-                packed_data = np.empty(1, 'O')
-                packed_data[0] = option_value
-                ncvar[:] = packed_data
+        for option_name, option_value in parameters.iteritems():
+            self._store_parameter(option_name, option_value)
+
+    def _store_parameter(self, option_name, option_value):
+        # If Quantity, strip off units first.
+        option_unit = None
+        if type(option_value) == units.Quantity:
+            option_unit = option_value.unit
+            option_value = option_value / option_unit
+        # Store the Python type.
+        option_type = type(option_value)
+        
+        # Handle NoneType
+        if type(option_value) == type(None):
+            option_value = ""
+        # Handle booleans
+        if type(option_value) == bool:
+            option_value = int(option_value)
+        # Store the variable.
+        logger.debug("Storing option: %s -> %s (type: %s)" % (option_name, option_value, str(option_type)))
+        if type(option_value) == str:
+            if option_name in self.ncfile.groups['options'].variables:
+                ncvar = self.ncfile.groups['options'].variables[option_name]
             else:
-                ncvar = ncgrp_options.createVariable(option_name, type(option_value))
-                ncvar.assignValue(option_value)
-            if option_unit: setattr(ncvar, 'units', str(option_unit))
-            setattr(ncvar, 'type', option_type.__name__) 
+                ncvar = self.ncfile.groups['options'].createVariable(option_name, type(option_value), 'scalar')
+            packed_data = np.empty(1, 'O')
+            packed_data[0] = option_value
+            ncvar[:] = packed_data
+        else:
+            if option_name in self.ncfile.groups['options'].variables:
+                ncvar = self.ncfile.groups['options'].variables[option_name]
+            else:
+                ncvar = self.ncfile.groups['options'].createVariable(option_name, type(option_value))
+            ncvar.assignValue(option_value)
+        if option_unit: setattr(ncvar, 'units', str(option_unit))
+        setattr(ncvar, 'type', option_type.__name__)
 
-    def _load_options(self):
-        """Return a dictionary of options from a loaded NetCDF file.
-        """
+    def _load_parameter(self, option_name):
         
-        logger.debug("Attempting to restore options from NetCDF file...")
+        option_ncvar = self.ncfile.groups['options'].variables[option_name]
+        # Get option value.
+        option_value = option_ncvar[0]
+        # Cast to Python type.
+        type_name = getattr(option_ncvar, 'type')
         
-        # Make sure this NetCDF file contains option information
-        if not 'options' in self.ncfile.groups:
-            # Not found, signal failure.
-            raise(ValueError("Options not found in NetCDF file!"))
-
-        # Find the group.
-        ncgrp_options = self.ncfile.groups['options']
+        if type_name == "NoneType":
+            return None
         
-        options = {}
-
-        # Load run parameters.
-        for option_name in ncgrp_options.variables.keys():
-            # Get NetCDF variable.
-            option_ncvar = ncgrp_options.variables[option_name]
-            # Get option value.
-            option_value = option_ncvar[0]
-            # Cast to Python type.
-            type_name = getattr(option_ncvar, 'type') 
+        else:
             option_value = eval(type_name + '(' + repr(option_value) + ')')
             # If Quantity, assign units.
             if hasattr(option_ncvar, 'units'):
@@ -283,8 +312,25 @@ class NetCDFDatabase(object):
             # Store option.
             logger.debug("Restoring option: %s -> %s (type: %s)" % (option_name, str(option_value), type(option_value)))
             #setattr(self, option_name, option_value)
-            options[option_name] = option_value
-            
+            return option_value 
+
+    def _load_parameters(self):
+        """Return a dictionary of options from a loaded NetCDF file.
+        """
+        
+        logger.debug("Attempting to restore options from NetCDF file...")
+        
+        # Make sure this NetCDF file contains option information
+        if not 'options' in self.ncfile.groups:
+            # Not found, signal failure.
+            raise(ValueError("Options not found in NetCDF file!"))
+
+        ncgrp_options = self.ncfile.groups['options']
+        
+        options = {}
+        for option_name in ncgrp_options.variables.keys():
+            options[option_name] = self._load_parameter(option_name)
+
         return options
 
 
