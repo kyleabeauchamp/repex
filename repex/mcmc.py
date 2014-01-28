@@ -89,6 +89,9 @@ from repex import thermodynamics
 
 from abc import abstractmethod 
 
+import logging
+logger = logging.getLogger(__name__)
+
 #=============================================================================================
 # MODULE CONSTANTS
 #=============================================================================================
@@ -757,6 +760,7 @@ class LangevinDynamicsMove(MCMCMove):
         context_initial_time = time.time()
         context = sampler_state.createContext(integrator, platform=platform)
         context_final_time = time.time()
+        logger.debug("LangevinDynamicMove: Context created, platform is %s" % context.getPlatform().getName())
 
         # Set pressure, if barostat is included.
         if barostat is not None:
