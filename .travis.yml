@@ -22,9 +22,11 @@ script:
     - export OPENMM_LIB_PATH=~/OpenMM/lib/
     - export OPENMM_INCLUDE_PATH=~/OpenMM/include/
     - cd python
+    - ls
+    - pwd
     - sudo -E python setup.py install
     - cd ../../
-    - cd tests
-    - nosetests -vv
-    - python setup.py install
+    - ls
+    - pwd    
+    - sudo -E python setup.py install
     - nosetests -vv tests-nose/test_testsystems.py
