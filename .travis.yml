@@ -2,16 +2,17 @@ language: c
 install:
     - sudo apt-get update -qq
     - sudo apt-get install -qq python-dev python-pip python-yaml g++
-    - sudo apt-get update -qq
     - sudo apt-get install -qq libpcre3 libpcre3-dev gromacs
     - sudo apt-get install -qq swig doxygen
     - sudo pip install conda
     - sudo conda init
     - conda create --yes --name test numpy scipy pytables numexpr nose pandas cython statsmodels pandas patsy pyyaml matplotlib pip
     - export PATH="$HOME/envs/test/bin/:$PATH"
+    - python -c "import numpy;print(numpy.version.version)"
     - pip install -q mdtraj git+git://github.com/rmcgibbo/simtk.unit
     
 script:
+    - python -c "import numpy;print(numpy.version.version)"
     - git clone https://github.com/SimTk/openmm.git
     - cd openmm
     - cmake -DCMAKE_INSTALL_PREFIX=~/OpenMM .
@@ -30,6 +31,7 @@ script:
     - ls
     - pwd    
     - which python
+    - python -c "import numpy;print(numpy.version.version)"    
     - sudo -E python setup.py install
     - which python
     - which nosetests
