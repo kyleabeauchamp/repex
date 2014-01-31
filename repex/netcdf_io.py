@@ -7,7 +7,7 @@ import simtk.unit as units
 import netCDF4 as netcdf
 
 from thermodynamics import ThermodynamicState
-from utils import str_to_system, dict_to_named_tuple
+from utils import str_to_system
 from version import version as __version__
 
 import logging
