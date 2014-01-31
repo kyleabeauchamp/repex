@@ -24,4 +24,6 @@ script:
     - cd ../../
     - python setup.py install
     - nosetests tests-nose/test_testsystems.py
+
+after_script:
     - pyflakes repex/*.py
