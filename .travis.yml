@@ -12,7 +12,8 @@ install:
     - pip install -q mdtraj git+git://github.com/rmcgibbo/simtk.unit
     
 script:
-    - python -c "import numpy;print(numpy.version.version)"
+    - which python
+    - $HOME/envs/test/bin/python -c "import numpy;print(numpy.version.version)"
     - git clone https://github.com/SimTk/openmm.git
     - cd openmm
     - cmake -DCMAKE_INSTALL_PREFIX=~/OpenMM .
