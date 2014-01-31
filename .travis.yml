@@ -27,13 +27,13 @@ script:
     - ls
     - pwd
     - which python
-    - sudo -E python setup.py install
+    - python setup.py install
     - cd ../../
     - ls
     - pwd    
     - which python
     - python -c "import numpy;print(numpy.version.version)"    
-    - sudo -E python setup.py install
+    - python setup.py install
     - which python
     - which nosetests
     - nosetests -vv tests-nose/test_testsystems.py
