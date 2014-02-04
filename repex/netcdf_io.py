@@ -82,7 +82,11 @@ class NetCDFDatabase(object):
             Extract trajectory from this thermodynamic state
         replica_index : int, optional
             Extract trajectory from this replica slot.
-            
+        
+        Returns
+        -------
+        traj : mdtraj.Trajectory
+            A trajectory object containing the desired slice of data.            
         
         Notes
         -----
