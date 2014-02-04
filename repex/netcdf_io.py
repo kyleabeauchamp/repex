@@ -5,6 +5,7 @@ import numpy as np
 import simtk.unit as units
 
 import netCDF4 as netcdf
+import mdtraj as md
 
 from thermodynamics import ThermodynamicState
 from utils import str_to_system
@@ -57,6 +58,74 @@ class NetCDFDatabase(object):
         for state in self.thermodynamic_states:
             if not state.is_compatible_with(self.thermodynamic_states[0]):
                 raise ValueError("Provided ThermodynamicState states must all be from the same thermodynamic ensemble.")
+
+    def set_traj(self, traj):
+        """Set a trajectory object for extracting trajectory slices.
+        
+        Parameters
+        ----------
+        
+        traj : mdtraj.Trajectory
+            A trajectory object whose topology is identical to your system.
+        """
+        if self.n_atoms != traj.n_atoms:
+            raise(ValueError("Trajectory must have %d atoms, found %d!" % (self.n_atoms, traj.n_atoms)))
+
+        self._traj = traj
+        
+    def get_traj(self, state_index=None, replica_index=None):
+        """Extract a trajectory slice along a replica or state index.
+        
+        Parameters
+        ----------
+        state_index : int, optional
+            Extract trajectory from this thermodynamic state
+        replica_index : int, optional
+            Extract trajectory from this replica slot.
+        
+        Returns
+        -------
+        traj : mdtraj.Trajectory
+            A trajectory object containing the desired slice of data.            
+        
+        Notes
+        -----
+        You must specify exactly ONE of `state_index` or `replica_index`.
+        
+        This function is a memory hog.
+        
+        To do: allow Trajectory as input to __init__ and automatically call set_traj().
+        To do: state_index code might be slow, possibly amenable to cython.
+        """
+        if not hasattr(self, "_traj"):
+            raise(IOError("You must first specify a compatible trajectory with set_traj()."))
+
+        if not (type(state_index) is int or type(replica_index) is int):
+            raise(ValueError("Must input either state_index or replica_index (as integer)."))
+        
+        if state_index is not None and replica_index is not None:
+            raise(ValueError("Cannot input both state_index and replica_index"))
+        
+        if state_index is not None and (state_index < 0 or state_index >= self.n_states):
+            raise(ValueError("Input must be between 0 and %d" % self.n_states))
+
+        if replica_index is not None and (replica_index < 0 or replica_index >= self.n_states):
+            raise(ValueError("Input must be between 0 and %d" % self.n_states))
+        
+        if replica_index is not None:
+            xyz = self.positions[:, replica_index]
+            box_vectors = self.box_vectors[:, replica_index]
+
+        if state_index is not None:
+            replica_indices = self.states[:].argsort()[:, state_index]
+            n = len(replica_indices)
+            xyz = np.array([self.positions[i, replica_indices[i]] for i in range(n)])  # Have to do this because netcdf4py breaks numpy fancy indexing and calls it a "feature" because it looks "more like fortran".
+            box_vectors = np.array([self.box_vectors[i, replica_indices[i]] for i in range(n)])
+
+        traj = md.Trajectory(xyz, self._traj.top)
+        traj.unitcell_vectors = box_vectors
+
+        return traj
 
 
     def _initialize_netcdf(self, thermodynamic_states, positions):
