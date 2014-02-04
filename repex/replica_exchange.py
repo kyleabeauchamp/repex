@@ -674,44 +674,6 @@ class ReplicaExchange(object):
 
         logger.debug("Mixing of replicas took %.3f s" % (end_time - start_time))
 
-    def _accumulate_mixing_statistics(self):
-        """Compute this mixing statistics (Tij)."""
-        if hasattr(self, "_Nij"):
-            return self._accumulate_mixing_statistics_update()
-        else:
-            return self._accumulate_mixing_statistics_full()
-
-    def _accumulate_mixing_statistics_full(self):
-        """Compute statistics of transitions iterating over all iterations of repex."""
-        self._Nij = np.zeros([self.n_states,self.n_states], np.float64)
-        for iteration in range(self.iteration - 1):
-            for ireplica in range(self.n_states):
-                istate = self.database.states[iteration, ireplica]
-                jstate = self.database.states[iteration + 1, ireplica]
-                self._Nij[istate,jstate] += 0.5
-                self._Nij[jstate,istate] += 0.5
-        Tij = np.zeros([self.n_states,self.n_states], np.float64)
-        for istate in range(self.n_states):
-            Tij[istate,:] = self._Nij[istate,:] / self._Nij[istate,:].sum()
-        
-        return Tij
-    
-    def _accumulate_mixing_statistics_update(self):
-        """Compute statistics of transitions updating Nij of last iteration of repex."""
-                
-        iteration = self.iteration - 2
-        for ireplica in range(self.n_states):
-            istate = self.database.states[iteration, ireplica]
-            jstate = self.database.states[iteration + 1, ireplica]
-            self._Nij[istate,jstate] += 0.5
-            self._Nij[jstate,istate] += 0.5
-
-        Tij = np.zeros([self.n_states,self.n_states], np.float64)
-        for istate in range(self.n_states):
-            Tij[istate,:] = self._Nij[istate,:] / self._Nij[istate,:].sum()
-        
-        return Tij
-
 
     def _show_mixing_statistics(self):
         """Print summary of mixing statistics.

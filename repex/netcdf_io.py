@@ -564,3 +564,461 @@ class NetCDFDatabase(object):
     @property
     def n_atoms(self):
         return self.positions.shape[2]
+
+
+    def show_mixing_statistics(ncfile, cutoff=0.05, nequil=0):
+        """
+        Print summary of mixing statistics.
+
+        ARGUMENTS
+
+        ncfile (netCDF4.Dataset) - NetCDF file
+        
+        OPTIONAL ARGUMENTS
+
+        cutoff (float) - only transition probabilities above 'cutoff' will be printed (default: 0.05)
+        nequil (int) - if specified, only samples nequil:end will be used in analysis (default: 0)
+        
+        """
+        
+        # Get dimensions.
+        niterations = ncfile.variables['states'].shape[0]
+        nstates = ncfile.variables['states'].shape[1]
+
+        # Compute statistics of transitions.
+        Nij = np.zeros([nstates,nstates], np.float64)
+        for iteration in range(nequil, niterations-1):
+            for ireplica in range(nstates):
+                istate = ncfile.variables['states'][iteration,ireplica]
+                jstate = ncfile.variables['states'][iteration+1,ireplica]
+                Nij[istate,jstate] += 0.5
+                Nij[jstate,istate] += 0.5
+        Tij = np.zeros([nstates,nstates], np.float64)
+        for istate in range(nstates):
+            Tij[istate,:] = Nij[istate,:] / Nij[istate,:].sum()
+
+        # Print observed transition probabilities.
+        print "Cumulative symmetrized state mixing transition matrix:"
+        print "%6s" % "",
+        for jstate in range(nstates):
+            print "%6d" % jstate,
+        print ""
+        for istate in range(nstates):
+            print "%-6d" % istate,
+            for jstate in range(nstates):
+                P = Tij[istate,jstate]
+                if (P >= cutoff):
+                    print "%6.3f" % P,
+                else:
+                    print "%6s" % "",
+            print ""
+
+        # Estimate second eigenvalue and equilibration time.
+        mu = np.linalg.eigvals(Tij)
+        mu = -np.sort(-mu) # sort in descending order
+        if (mu[1] >= 1):
+            logger.info("Perron eigenvalue is unity; Markov chain is decomposable.")
+        else:
+            logger.info("Perron eigenvalue is %9.5f; state equilibration timescale is ~ %.1f iterations" % (mu[1], 1.0 / (1.0 - mu[1])))
+
+
+    def analyze_acceptance_probabilities(ncfile, cutoff = 0.4):
+        """Analyze acceptance probabilities.
+
+        ARGUMENTS
+           ncfile (NetCDF) - NetCDF file to be analyzed.
+
+        OPTIONAL ARGUMENTS
+           cutoff (float) - cutoff for showing acceptance probabilities as blank (default: 0.4)
+        """
+
+        # Get current dimensions.
+        niterations = ncfile.variables['mixing'].shape[0]
+        nstates = ncfile.variables['mixing'].shape[1]
+
+        # Compute mean.
+        mixing = ncfile.variables['mixing'][:,:,:]
+        Pij = np.mean(mixing, 0)
+
+        # Write title.
+        print "Average state-to-state acceptance probabilities"
+        print "(Probabilities less than %(cutoff)f shown as blank.)" % vars()
+        print ""
+
+        # Write header.
+        print "%4s" % "",
+        for j in range(nstates):
+            print "%6d" % j,
+        print ""
+
+        # Write rows.
+        for i in range(nstates):
+            print "%4d" % i, 
+            for j in range(nstates):
+                if Pij[i,j] > cutoff:
+                    print "%6.3f" % Pij[i,j],
+                else:
+                    print "%6s" % "",
+                
+            print ""
+
+        return
+
+    def check_energies(ncfile, atoms):
+        """
+        Examine energy history for signs of instability (nans).
+
+        ARGUMENTS
+           ncfile (NetCDF) - input YANK netcdf file
+        """
+
+        # Get current dimensions.
+        niterations = ncfile.variables['energies'].shape[0]
+        nstates = ncfile.variables['energies'].shape[1]
+
+        # Extract energies.
+        logger.info("Reading energies...")
+        energies = ncfile.variables['energies']
+        u_kln_replica = np.zeros([nstates, nstates, niterations], np.float64)
+        for n in range(niterations):
+            u_kln_replica[:,:,n] = energies[n,:,:]
+        logger.info("Done.")
+
+        # Deconvolute replicas
+        logger.info("Deconvoluting replicas...")
+        u_kln = np.zeros([nstates, nstates, niterations], np.float64)
+        for iteration in range(niterations):
+            state_indices = ncfile.variables['states'][iteration,:]
+            u_kln[state_indices,:,iteration] = energies[iteration,:,:]
+        logger.info("Done.")
+
+        # Show all self-energies
+        show_self_energies = False
+        if (show_self_energies):
+            logger.info('all self-energies for all replicas')
+            for iteration in range(niterations):
+                for replica in range(nstates):
+                    state = int(ncfile.variables['states'][iteration,replica])
+                    print '%12.1f' % energies[iteration, replica, state],
+                print ''
+
+        # If no energies are 'nan', we're clean.
+        if not np.any(np.isnan(energies[:,:,:])):
+            return
+
+        # There are some energies that are 'nan', so check if the first iteration has nans in their *own* energies:
+        u_k = np.diag(energies[0,:,:])
+        if np.any(np.isnan(u_k)):
+            logger.info("First iteration has exploded replicas.  Check to make sure structures are minimized before dynamics")
+            logger.info("Energies for all replicas after equilibration:")
+            logger.info(u_k)
+            sys.exit(1)
+
+        # There are some energies that are 'nan' past the first iteration.  Find the first instances for each replica and write PDB files.
+        first_nan_k = np.zeros([nstates], np.int32)
+        for iteration in range(niterations):
+            for k in range(nstates):
+                if np.isnan(energies[iteration,k,k]) and first_nan_k[k]==0:
+                    first_nan_k[k] = iteration
+        if not all(first_nan_k == 0):
+            logger.info("Some replicas exploded during the simulation.")
+            logger.info("Iterations where explosions were detected for each replica:")
+            logger.info(first_nan_k)
+            logger.info("Writing PDB files immediately before explosions were detected...")
+            for replica in range(nstates):            
+                if (first_nan_k[replica] > 0):
+                    state = ncfile.variables['states'][iteration,replica]
+                    iteration = first_nan_k[replica] - 1
+                    filename = 'replica-%d-before-explosion.pdb' % replica
+                    title = 'replica %d state %d iteration %d' % (replica, state, iteration)
+                    write_pdb(atoms, filename, iteration, replica, title, ncfile)
+                    filename = 'replica-%d-before-explosion.crd' % replica                
+                    write_crd(filename, iteration, replica, title, ncfile)
+            sys.exit(1)
+
+        # There are some energies that are 'nan', but these are energies at foreign lambdas.  We'll just have to be careful with MBAR.
+        # Raise a warning.
+        logger.info("WARNING: Some energies at foreign lambdas are 'nan'.  This is recoverable.")
+            
+        return
+
+    def check_positions(ncfile):
+        """Make sure no positions have gone 'nan'.
+
+        ARGUMENTS
+           ncfile (NetCDF) - NetCDF file object for input file
+        """
+
+        # Get current dimensions.
+        niterations = ncfile.variables['positions'].shape[0]
+        nstates = ncfile.variables['positions'].shape[1]
+        natoms = ncfile.variables['positions'].shape[2]
+
+        # Compute torsion angles for each replica
+        for iteration in range(niterations):
+            for replica in range(nstates):
+                # Extract positions
+                positions = np.array(ncfile.variables['positions'][iteration,replica,:,:])
+                # Check for nan
+                if np.any(np.isnan(positions)):
+                    # Nan found -- raise error
+                    logger.info("Iteration %d, state %d - nan found in positions." % (iteration, replica))
+                    # Report coordinates
+                    for atom_index in range(natoms):
+                        logger.info("%16.3f %16.3f %16.3f" % (positions[atom_index,0], positions[atom_index,1], positions[atom_index,2]))
+                        if np.any(np.isnan(positions[atom_index,:])):
+                            raise "nan detected in positions"
+
+
+    def estimate_free_energies(ncfile, ndiscard = 0, nuse = None):
+        """Estimate free energies of all alchemical states.
+
+        ARGUMENTS
+           ncfile (NetCDF) - input YANK netcdf file
+
+        OPTIONAL ARGUMENTS
+           ndiscard (int) - number of iterations to discard to equilibration
+           nuse (int) - maximum number of iterations to use (after discarding)
+
+        TODO: Automatically determine 'ndiscard'.
+        """
+
+        # Get current dimensions.
+        niterations = ncfile.variables['energies'].shape[0]
+        nstates = ncfile.variables['energies'].shape[1]
+        natoms = ncfile.variables['energies'].shape[2]
+
+        # Extract energies.
+        logger.info("Reading energies...")
+        energies = ncfile.variables['energies']
+        u_kln_replica = np.zeros([nstates, nstates, niterations], np.float64)
+        for n in range(niterations):
+            u_kln_replica[:,:,n] = energies[n,:,:]
+        logger.info("Done.")
+
+        # Deconvolute replicas
+        logger.info("Deconvoluting replicas...")
+        u_kln = np.zeros([nstates, nstates, niterations], np.float64)
+        for iteration in range(niterations):
+            state_indices = ncfile.variables['states'][iteration,:]
+            u_kln[state_indices,:,iteration] = energies[iteration,:,:]
+        logger.info("Done.")
+
+        # Compute total negative log probability over all iterations.
+        u_n = np.zeros([niterations], np.float64)
+        for iteration in range(niterations):
+            u_n[iteration] = np.sum(np.diagonal(u_kln[:,:,iteration]))
+        #logger.info(u_n
+
+        # DEBUG
+        outfile = open('u_n.out', 'w')
+        for iteration in range(niterations):
+            outfile.write("%8d %24.3f\n" % (iteration, u_n[iteration]))
+        outfile.close()
+
+        # Discard initial data to equilibration.
+        u_kln_replica = u_kln_replica[:,:,ndiscard:]
+        u_kln = u_kln[:,:,ndiscard:]
+        u_n = u_n[ndiscard:]
+
+        # Truncate to number of specified conforamtions to use
+        if (nuse):
+            u_kln_replica = u_kln_replica[:,:,0:nuse]
+            u_kln = u_kln[:,:,0:nuse]
+            u_n = u_n[0:nuse]
+        
+        # Subsample data to obtain uncorrelated samples
+        N_k = np.zeros(nstates, np.int32)    
+        indices = timeseries.subsampleCorrelatedData(u_n) # indices of uncorrelated samples
+        #print u_n # DEBUG
+        #indices = range(0,u_n.size) # DEBUG - assume samples are uncorrelated
+        N = len(indices) # number of uncorrelated samples
+        N_k[:] = N      
+        u_kln[:,:,0:N] = u_kln[:,:,indices]
+        logger.info("number of uncorrelated samples:")
+        logger.info(N_k)
+        logger.info("")
+
+        #===================================================================================================
+        # Estimate free energy difference with MBAR.
+        #===================================================================================================   
+       
+        # Initialize MBAR (computing free energy estimates, which may take a while)
+        logger.info("Computing free energy differences...")
+        mbar = MBAR(u_kln, N_k, verbose = False, method = 'self-consistent-iteration', maximum_iterations = 50000) # use slow self-consistent-iteration (the default)
+        #mbar = MBAR(u_kln, N_k, verbose = True, method = 'Newton-Raphson') # use faster Newton-Raphson solver
+
+        # Get matrix of dimensionless free energy differences and uncertainty estimate.
+        logger.info("Computing covariance matrix...")
+        (Deltaf_ij, dDeltaf_ij) = mbar.getFreeEnergyDifferences(uncertainty_method='svd-ew')
+       
+    #    # Matrix of free energy differences
+        logger.info("Deltaf_ij:")
+        for i in range(nstates):
+            for j in range(nstates):
+                print "%8.3f" % Deltaf_ij[i,j],
+            print ""        
+        
+    #    print Deltaf_ij
+    #    # Matrix of uncertainties in free energy difference (expectations standard deviations of the estimator about the true free energy)
+        logger.info("dDeltaf_ij:")
+        for i in range(nstates):
+            for j in range(nstates):
+                print "%8.3f" % dDeltaf_ij[i,j],
+            print ""        
+
+        # Return free energy differences and an estimate of the covariance.
+        return (Deltaf_ij, dDeltaf_ij)
+
+    def estimate_enthalpies(ncfile, ndiscard = 0, nuse = None):
+        """Estimate enthalpies of all alchemical states.
+
+        ARGUMENTS
+           ncfile (NetCDF) - input YANK netcdf file
+
+        OPTIONAL ARGUMENTS
+           ndiscard (int) - number of iterations to discard to equilibration
+           nuse (int) - number of iterations to use (after discarding) 
+
+        TODO: Automatically determine 'ndiscard'.
+        TODO: Combine some functions with estimate_free_energies.
+        """
+
+        # Get current dimensions.
+        niterations = ncfile.variables['energies'].shape[0]
+        nstates = ncfile.variables['energies'].shape[1]
+        natoms = ncfile.variables['energies'].shape[2]
+
+        # Extract energies.
+        logger.info("Reading energies...")
+        energies = ncfile.variables['energies']
+        u_kln_replica = np.zeros([nstates, nstates, niterations], np.float64)
+        for n in range(niterations):
+            u_kln_replica[:,:,n] = energies[n,:,:]
+        logger.info("Done.")
+
+        # Deconvolute replicas
+        logger.info("Deconvoluting replicas...")
+        u_kln = np.zeros([nstates, nstates, niterations], np.float64)
+        for iteration in range(niterations):
+            state_indices = ncfile.variables['states'][iteration,:]
+            u_kln[state_indices,:,iteration] = energies[iteration,:,:]
+        logger.info("Done.")
+
+        # Compute total negative log probability over all iterations.
+        u_n = np.zeros([niterations], np.float64)
+        for iteration in range(niterations):
+            u_n[iteration] = np.sum(np.diagonal(u_kln[:,:,iteration]))
+        #print u_n
+
+        # DEBUG
+        outfile = open('u_n.out', 'w')
+        for iteration in range(niterations):
+            outfile.write("%8d %24.3f\n" % (iteration, u_n[iteration]))
+        outfile.close()
+
+        # Discard initial data to equilibration.
+        u_kln_replica = u_kln_replica[:,:,ndiscard:]
+        u_kln = u_kln[:,:,ndiscard:]
+        u_n = u_n[ndiscard:]
+        
+        # Truncate to number of specified conformations to use
+        if (nuse):
+            u_kln_replica = u_kln_replica[:,:,0:nuse]
+            u_kln = u_kln[:,:,0:nuse]
+            u_n = u_n[0:nuse]
+
+        # Subsample data to obtain uncorrelated samples
+        N_k = np.zeros(nstates, np.int32)
+        indices = timeseries.subsampleCorrelatedData(u_n) # indices of uncorrelated samples
+        #print u_n # DEBUG
+        #indices = range(0,u_n.size) # DEBUG - assume samples are uncorrelated
+        N = len(indices) # number of uncorrelated samples
+        N_k[:] = N      
+        u_kln[:,:,0:N] = u_kln[:,:,indices]
+        logger.info("number of uncorrelated samples:")
+        logger.info(N_k)
+        logger.info("")
+
+        # Compute average enthalpies.
+        H_k = np.zeros([nstates], np.float64) # H_i[i] is estimated enthalpy of state i
+        dH_k = np.zeros([nstates], np.float64)
+        for k in range(nstates):
+            H_k[k] = u_kln[k,k,:].mean()
+            dH_k[k] = u_kln[k,k,:].std() / np.sqrt(N)
+
+        return (H_k, dH_k)
+
+    def extract_u_n(ncfile):
+        """
+        Extract timeseries of u_n = - log q(x_n)
+
+        """
+
+        # Get current dimensions.
+        niterations = ncfile.variables['energies'].shape[0]
+        nstates = ncfile.variables['energies'].shape[1]
+        natoms = ncfile.variables['energies'].shape[2]
+
+        # Extract energies.
+        logger.info("Reading energies...")
+        energies = ncfile.variables['energies']
+        u_kln_replica = np.zeros([nstates, nstates, niterations], np.float64)
+        for n in range(niterations):
+            u_kln_replica[:,:,n] = energies[n,:,:]
+        logger.info("Done.")
+
+        # Deconvolute replicas
+        logger.info("Deconvoluting replicas...")
+        u_kln = np.zeros([nstates, nstates, niterations], np.float64)
+        for iteration in range(niterations):
+            state_indices = ncfile.variables['states'][iteration,:]
+            u_kln[state_indices,:,iteration] = energies[iteration,:,:]
+        logger.info("Done.")
+
+        # Compute total negative log probability over all iterations.
+        u_n = np.zeros([niterations], np.float64)
+        for iteration in range(niterations):
+            u_n[iteration] = np.sum(np.diagonal(u_kln[:,:,iteration]))
+
+        return u_n
+
+
+    def _accumulate_mixing_statistics(self):
+        """Return the mixing transition matrix Tij."""
+        if hasattr(self, "_Nij"):
+            return self._accumulate_mixing_statistics_update()
+        else:
+            return self._accumulate_mixing_statistics_full()
+
+    def _accumulate_mixing_statistics_full(self):
+        """Compute statistics of transitions iterating over all iterations of repex."""
+        self._Nij = np.zeros([self.n_states, self.n_states], np.float64)
+        for iteration in range(self.iteration - 1):
+            for ireplica in range(self.n_states):
+                istate = self.database.states[iteration, ireplica]
+                jstate = self.database.states[iteration + 1, ireplica]
+                self._Nij[istate, jstate] += 0.5
+                self._Nij[jstate, istate] += 0.5
+        
+        Tij = np.zeros([self.n_states, self.n_states], np.float64)
+        for istate in range(self.n_states):
+            Tij[istate] = self._Nij[istate] / self._Nij[istate].sum()
+        
+        return Tij
+    
+    def _accumulate_mixing_statistics_update(self):
+        """Compute statistics of transitions updating Nij of last iteration of repex."""
+                
+        iteration = self.iteration - 2
+        for ireplica in range(self.n_states):
+            istate = self.database.states[iteration, ireplica]
+            jstate = self.database.states[iteration + 1, ireplica]
+            self._Nij[istate,jstate] += 0.5
+            self._Nij[jstate,istate] += 0.5
+
+        Tij = np.zeros([self.n_states, self.n_states], np.float64)
+        for istate in range(self.n_states):
+            Tij[istate] = self._Nij[istate] / self._Nij[istate].sum()
+        
+        return Tij
