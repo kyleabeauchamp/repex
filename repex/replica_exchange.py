@@ -690,26 +690,8 @@ class ReplicaExchange(object):
         # Don't print anything if there is only one replica.
         if (self.n_replicas < 2):
             return
-        
-        initial_time = time.time()
 
-        Tij = self._accumulate_mixing_statistics()
-
-        P = pd.DataFrame(Tij)
-        logger.info("\nCumulative symmetrized state mixing transition matrix:\n%s" % P.to_string())
-
-        # Estimate second eigenvalue and equilibration time.
-        mu = np.linalg.eigvals(Tij)
-        mu = -np.sort(-mu) # sort in descending order
-        if (mu[1] >= 1):
-            logger.info("\nPerron eigenvalue is unity; Markov chain is decomposable.")
-        else:
-            logger.info("\nPerron eigenvalue is %9.5f; state equilibration timescale is ~ %.1f iterations" % (mu[1], 1.0 / (1.0 - mu[1])))
-
-        # Show time consumption statistics.
-        final_time = time.time()
-        elapsed_time = final_time - initial_time
-        logger.info("Time to compute mixing statistics %.3f s" % elapsed_time)
+        self.database._show_mixing_statistics()
 
     def output_iteration(self):
         """Get relevant data from current iteration and store in database.
