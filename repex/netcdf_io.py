@@ -15,7 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class NetCDFDatabase(Analysis):
+class NetCDFDatabase(Analyzer):
     """A netCDF based database for Repex simulations.
     
     
@@ -33,7 +33,7 @@ class NetCDFDatabase(Analysis):
     Notes
     -----
     
-    This class inherits the Analysis class, which provides member functions
+    This class inherits the Analyzer class, which provides member functions
     related to MBar and trajectory analysis.
     
     """

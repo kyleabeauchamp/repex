@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class Analysis(object):
+class Analyzer(object):
     """A MixIn class that gives MBAR and other analysis functions to the database.
     """
 
