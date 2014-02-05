@@ -9,7 +9,7 @@ import netCDF4 as netcdf
 from thermodynamics import ThermodynamicState
 from utils import str_to_system
 from version import version as __version__
-from analysis import Analysis
+from analysis import Analyzer
 
 import logging
 logger = logging.getLogger(__name__)
