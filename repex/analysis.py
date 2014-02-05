@@ -1,16 +1,7 @@
-import os
-
 import numpy as np
 import pandas as pd
 
-import simtk.unit as units
-
-import netCDF4 as netcdf
 import mdtraj as md
-
-from thermodynamics import ThermodynamicState
-from utils import str_to_system
-from version import version as __version__
 
 from pymbar import MBAR, timeseries
 
@@ -19,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class Analysis(object):
-    """A MixIn class that provides MBAR and other analysis to the database.
+    """A MixIn class that gives MBAR and other analysis functions to the database.
     """
 
 

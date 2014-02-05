@@ -1,19 +1,15 @@
 import os
 
 import numpy as np
-import pandas as pd
 
 import simtk.unit as units
 
 import netCDF4 as netcdf
-import mdtraj as md
 
 from thermodynamics import ThermodynamicState
 from utils import str_to_system
 from version import version as __version__
 from analysis import Analysis
-
-from pymbar import MBAR, timeseries
 
 import logging
 logger = logging.getLogger(__name__)
