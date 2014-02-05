@@ -13,7 +13,7 @@ import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
-@skipif(True)
+
 def test_get_traj():
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
