@@ -674,44 +674,6 @@ class ReplicaExchange(object):
 
         logger.debug("Mixing of replicas took %.3f s" % (end_time - start_time))
 
-    def _accumulate_mixing_statistics(self):
-        """Compute this mixing statistics (Tij)."""
-        if hasattr(self, "_Nij"):
-            return self._accumulate_mixing_statistics_update()
-        else:
-            return self._accumulate_mixing_statistics_full()
-
-    def _accumulate_mixing_statistics_full(self):
-        """Compute statistics of transitions iterating over all iterations of repex."""
-        self._Nij = np.zeros([self.n_states,self.n_states], np.float64)
-        for iteration in range(self.iteration - 1):
-            for ireplica in range(self.n_states):
-                istate = self.database.states[iteration, ireplica]
-                jstate = self.database.states[iteration + 1, ireplica]
-                self._Nij[istate,jstate] += 0.5
-                self._Nij[jstate,istate] += 0.5
-        Tij = np.zeros([self.n_states,self.n_states], np.float64)
-        for istate in range(self.n_states):
-            Tij[istate,:] = self._Nij[istate,:] / self._Nij[istate,:].sum()
-        
-        return Tij
-    
-    def _accumulate_mixing_statistics_update(self):
-        """Compute statistics of transitions updating Nij of last iteration of repex."""
-                
-        iteration = self.iteration - 2
-        for ireplica in range(self.n_states):
-            istate = self.database.states[iteration, ireplica]
-            jstate = self.database.states[iteration + 1, ireplica]
-            self._Nij[istate,jstate] += 0.5
-            self._Nij[jstate,istate] += 0.5
-
-        Tij = np.zeros([self.n_states,self.n_states], np.float64)
-        for istate in range(self.n_states):
-            Tij[istate,:] = self._Nij[istate,:] / self._Nij[istate,:].sum()
-        
-        return Tij
-
 
     def _show_mixing_statistics(self):
         """Print summary of mixing statistics.
@@ -728,26 +690,8 @@ class ReplicaExchange(object):
         # Don't print anything if there is only one replica.
         if (self.n_replicas < 2):
             return
-        
-        initial_time = time.time()
 
-        Tij = self._accumulate_mixing_statistics()
-
-        P = pd.DataFrame(Tij)
-        logger.info("\nCumulative symmetrized state mixing transition matrix:\n%s" % P.to_string())
-
-        # Estimate second eigenvalue and equilibration time.
-        mu = np.linalg.eigvals(Tij)
-        mu = -np.sort(-mu) # sort in descending order
-        if (mu[1] >= 1):
-            logger.info("\nPerron eigenvalue is unity; Markov chain is decomposable.")
-        else:
-            logger.info("\nPerron eigenvalue is %9.5f; state equilibration timescale is ~ %.1f iterations" % (mu[1], 1.0 / (1.0 - mu[1])))
-
-        # Show time consumption statistics.
-        final_time = time.time()
-        elapsed_time = final_time - initial_time
-        logger.info("Time to compute mixing statistics %.3f s" % elapsed_time)
+        self.database._show_mixing_statistics()
 
     def output_iteration(self):
         """Get relevant data from current iteration and store in database.
