@@ -10,39 +10,38 @@ using the amber10 collection of forcefield parameters.  An implicit solvent (OBC
 # GLOBAL IMPORTS
 #=============================================================================================
 
-import numpy as np
-import simtk.unit as unit
-from repex.thermodynamics import ThermodynamicState
-from repex.parallel_tempering import ParallelTempering
-from repex import testsystems
-from repex.utils import permute_energies
-from repex import dummympi
-import repex
-
-import tempfile
-from mdtraj.testing import eq
-
-
 #=============================================================================================
 # RUN PARALLEL TEMPERING SIMULATION
 #=============================================================================================
 
 output_filename = "repex.nc" # name of NetCDF file to store simulation output
 
-# First, try to resume, if simulation file already exists.
-try:
-    print "Attempting to resume existing simulation..."
-    simulation = repex.resume(output_filename)
-    
-    # Extend the simulation by a few iterations.
-    niterations_to_extend = 10
-    simulation.extend(niterations_to_extend)    
+# If simulation file already exists, try to resume.
+import os.path
+resume = False
+if os.path.exists(output_filename):
+    resume = True
 
-except Exception as e:
-    print "Could not resume existing simulation, starting new simulation..."
-    print e
+if resume:
+    try:
+        print "Attempting to resume existing simulation..."
+        import repex
+        simulation = repex.resume(output_filename)
+        
+        # Extend the simulation by a few iterations.
+        niterations_to_extend = 10
+        simulation.extend(niterations_to_extend)    
+    except Exception as e:
+        print "Could not resume existing simulation due to exception:"
+        print e
+        print ""
+        resume = False
+
+if not resume:
+    print "Starting new simulation..."
 
     # Set parallel tempering parameters
+    from simtk import unit
     # Temperatures will be exponentially (geometrically) spaced by default
     T_min = 273.0 * unit.kelvin # minimum temperature for parallel tempering ladder
     T_max = 600.0 * unit.kelvin # maximum temperature for parallel tempering ladder
@@ -67,8 +66,15 @@ except Exception as e:
     replica_positions = [model.positions for i in range(n_temps)] # number of replica positions as input must match number of replicas
 
     # Create parallel tempering simulation object.
-    mpicomm = dummympi.DummyMPIComm()
+    import repex
+    mpicomm = repex.dummympi.DummyMPIComm()
     parameters = {"number_of_iterations" : 10}
+    # BEGIN UGLY HACK TO USE CPU PLATFORM
+    from simtk import openmm
+    platform = openmm.Platform.getPlatformByName("CPU")
+    parameters = {"platform" : platform}
+    # END UGLY HACK
+    from repex import ParallelTempering
     simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, parameters=parameters)
 
     # Run the parallel tempering simulation.

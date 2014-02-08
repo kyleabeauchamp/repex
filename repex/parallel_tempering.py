@@ -143,8 +143,11 @@ class ParallelTempering(ReplicaExchange):
         else:
             database = None
         
-        
-        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
+        # UGLY HACK BECAUSE MCMC SAMPLER STATE INITIALIZATION REQURES CONTEXT CREATION
+        platform = None
+        if 'platform' in parameters: platform = parameters['platform']
+        # END UGLY HACK
+        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]
         repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, parameters=parameters)
         # Override title.
         repex.title = 'Parallel tempering simulation created using ParallelTempering class of repex.py on %s' % time.asctime(time.localtime())        

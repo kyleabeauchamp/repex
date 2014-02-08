@@ -134,6 +134,8 @@ class MCMCSamplerState(object):
        Current kinetic energy.
     total_energy : optional, simtk.unit.Quantity compatible with kilocalories_per_mole
        Current total energy.
+    platform : optional, simtk.openmm.Platform
+       Platform to use for Context creation to initialize sampler state.
 
     Examples
     --------
@@ -155,15 +157,18 @@ class MCMCSamplerState(object):
     >>> # Create a sampler state manually.
     >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
 
+    TODO:
+    * Can we remove the need to create a Context in initializing the sampler state by using the Reference platform and skipping energy calculations?
+
     """
-    def __init__(self, system, positions, velocities=None, box_vectors=None):
+    def __init__(self, system, positions, velocities=None, box_vectors=None, platform=None):
         self.system = copy.deepcopy(system)
         self.positions = positions
         self.velocities = velocities
         self.box_vectors = box_vectors
 
         # Create Context.
-        context = self.createContext()
+        context = self.createContext(platform=platform)
         
         # Get state.
         openmm_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True)
