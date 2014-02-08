@@ -33,16 +33,42 @@ class ReplicaExchange(object):
     default_parameters["minimize"] = True 
     default_parameters["minimize_tolerance"] = 1.0 * units.kilojoules_per_mole / units.nanometers # if specified, set minimization tolerance
     default_parameters["minimize_maxIterations"] = 0 # if nonzero, set maximum iterations
-    default_parameters["platform"] = None
     default_parameters["replica_mixing_scheme"] = 'swap-all' # mix all replicas thoroughly
     default_parameters["online_analysis"] = False # if True, analysis will occur each iteration
     default_parameters["show_energies"] = True
     default_parameters["show_mixing_statistics"] = True
-    default_parameters["platform"] = None
     default_parameters["integrator"] = None
 
-    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, parameters={}):
+    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, platform=None, parameters={}):
         """
+        Create a new ReplicaExchange simulation object.
+        
+        Parameters
+        ----------
+        thermodynamic_states : list of ThermodynamicState objects
+            List of thermodynamic states to simulate.
+        sampler_states : list of MCMCSamplerState objects, optional?
+            List of MCMC sampler states to initialize replica exchange simulations with.
+        database : Database object, optional
+            Database to use to write/append simulation data to.
+        mpicomm : mpicomm implementation, optional?
+            Communicator (real or dummy) implementation to use for parallelization.
+        platform : simtk.openmm.Platform, optional, default None
+            Platform to use for execution.
+
+        Examples
+        --------
+        
+        Create a replica exchange object for a harmonic oscillator.
+        
+        >>> # Create thermodynamic states.
+        >>> from thermodynamics import ThermodynamicState
+        >>> # Create a test system
+        >>> import testsystems
+        >>> test = testsystems.AlanineDipeptideVacuum()
+        >>> # Create sampler states.
+        >>> sampler_states = [MCMCSamplerState(system=test.system, positions=test.positions) for index in range(nreplicas)]
+        
         """
         
         if mpicomm is None:
@@ -52,8 +78,7 @@ class ReplicaExchange(object):
 
         self.database = database
         self.thermodynamic_states = thermodynamic_states
-        
-        
+                
         self.n_states = len(self.thermodynamic_states)
         self.n_atoms = self.thermodynamic_states[0].system.getNumParticles()        
         
@@ -71,8 +96,8 @@ class ReplicaExchange(object):
             self._allocate_arrays()
         else:  # Resume repex job
             self._broadcast_database()
-
-        self.platform = self.parameters.platform  # For convenience
+        
+        self.platform = platform
         self.current_timestep = self.parameters.timestep
         
         self.n_replicas = len(self.thermodynamic_states)  # Determine number of replicas from the number of specified thermodynamic states.
@@ -391,7 +416,7 @@ class ReplicaExchange(object):
 
     def _minimize_all_replicas(self):
         for replica_index in range(self.n_states):
-            self.sampler_states[replica_index].minimize()
+            self.sampler_states[replica_index].minimize(platform=self.platform)
             
     def _minimize_and_equilibrate(self):
         """

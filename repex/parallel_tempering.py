@@ -31,9 +31,9 @@ class ParallelTempering(ReplicaExchange):
     
     """
 
-    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, parameters={}):
+    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, platform=None, parameters={}):
         self._check_self_consistency(thermodynamic_states)
-        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states=sampler_states, database=database, mpicomm=mpicomm, parameters=parameters)
+        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states=sampler_states, database=database, mpicomm=mpicomm, platform=platform, parameters=parameters)
 
     def _check_self_consistency(self, thermodynamic_states):
         """Checks that each state is identical except for the temperature, as required for ParallelTempering."""
@@ -90,7 +90,7 @@ class ParallelTempering(ReplicaExchange):
 
 
     @classmethod
-    def create(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, parameters={}):
+    def create(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, platform=None, parameters={}):
         """Create a new ParallelTempering simulation.
         
         Parameters
@@ -143,12 +143,8 @@ class ParallelTempering(ReplicaExchange):
         else:
             database = None
         
-        # UGLY HACK BECAUSE MCMC SAMPLER STATE INITIALIZATION REQURES CONTEXT CREATION
-        platform = None
-        if 'platform' in parameters: platform = parameters['platform']
-        # END UGLY HACK
         sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]
-        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, parameters=parameters)
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, platform=platform, parameters=parameters)
         # Override title.
         repex.title = 'Parallel tempering simulation created using ParallelTempering class of repex.py on %s' % time.asctime(time.localtime())        
 

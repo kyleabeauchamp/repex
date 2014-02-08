@@ -7,8 +7,11 @@ using the amber10 collection of forcefield parameters.  An implicit solvent (OBC
 """
 
 #=============================================================================================
-# GLOBAL IMPORTS
+# TURN DEBUG LOGGING ON
 #=============================================================================================
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 #=============================================================================================
 # RUN PARALLEL TEMPERING SIMULATION
@@ -65,17 +68,16 @@ if not resume:
     system = forcefield.createSystem(model.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
     replica_positions = [model.positions for i in range(n_temps)] # number of replica positions as input must match number of replicas
 
+    # Select simulation platform.
+    from simtk import openmm
+    platform = openmm.Platform.getPlatformByName("CPU")
+
     # Create parallel tempering simulation object.
     import repex
     mpicomm = repex.dummympi.DummyMPIComm()
     parameters = {"number_of_iterations" : 10}
-    # BEGIN UGLY HACK TO USE CPU PLATFORM
-    from simtk import openmm
-    platform = openmm.Platform.getPlatformByName("CPU")
-    parameters = {"platform" : platform}
-    # END UGLY HACK
     from repex import ParallelTempering
-    simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, parameters=parameters)
+    simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, platform=platform, parameters=parameters)
 
     # Run the parallel tempering simulation.
     replica_exchange.run()
