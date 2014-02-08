@@ -80,5 +80,5 @@ if not resume:
     simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, platform=platform, parameters=parameters)
 
     # Run the parallel tempering simulation.
-    replica_exchange.run()
+    simulation.run()
 
