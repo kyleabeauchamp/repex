@@ -1,10 +1,11 @@
 import simtk.unit as u
+import math
 from simtk.openmm import app
 import simtk.openmm as mm
 from repex.thermodynamics import ThermodynamicState
 from repex.replica_exchange import ReplicaExchange
 
-nc_filename = "./out.nc"
+nc_filename = "repex.nc"
 
 n_replicas = 3 # number of temperature replicas
 T_min = 298.0 * u.kelvin # minimum temperature
@@ -12,8 +13,7 @@ T_max = 600.0 * u.kelvin # maximum temperature
 
 T_i = [ T_min + (T_max - T_min) * (math.exp(float(i) / float(n_replicas-1)) - 1.0) / (math.e - 1.0) for i in range(n_replicas) ]
 
-
-pdb_filename = "./1vii.pdb"
+pdb_filename = "1VII.pdb"
 
 temperature = 300 * u.kelvin
 friction = 0.3 / u.picosecond
