@@ -19,6 +19,10 @@ logging.basicConfig(level=logging.DEBUG)
 
 output_filename = "repex.nc" # name of NetCDF file to store simulation output
 
+# Select simulation platform.
+from simtk import openmm
+platform = openmm.Platform.getPlatformByName("CPU")
+
 # If simulation file already exists, try to resume.
 import os.path
 resume = False
@@ -29,7 +33,7 @@ if resume:
     try:
         print "Attempting to resume existing simulation..."
         import repex
-        simulation = repex.resume(output_filename)
+        simulation = repex.resume(output_filename, platform=platform)
         
         # Extend the simulation by a few iterations.
         niterations_to_extend = 10
@@ -67,10 +71,6 @@ if not resume:
     # Create OpenMM system and retrieve atomic positions.
     system = forcefield.createSystem(model.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
     replica_positions = [model.positions for i in range(n_temps)] # number of replica positions as input must match number of replicas
-
-    # Select simulation platform.
-    from simtk import openmm
-    platform = openmm.Platform.getPlatformByName("CPU")
 
     # Create parallel tempering simulation object.
     import repex

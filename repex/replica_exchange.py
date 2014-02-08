@@ -76,6 +76,7 @@ class ReplicaExchange(object):
         else:
             self.mpicomm = mpicomm
 
+        self.platform = platform
         self.database = database
         self.thermodynamic_states = thermodynamic_states
                 
@@ -97,7 +98,6 @@ class ReplicaExchange(object):
         else:  # Resume repex job
             self._broadcast_database()
         
-        self.platform = platform
         self.current_timestep = self.parameters.timestep
         
         self.n_replicas = len(self.thermodynamic_states)  # Determine number of replicas from the number of specified thermodynamic states.
@@ -210,7 +210,7 @@ class ReplicaExchange(object):
         self.parameters = dict_to_named_tuple(self.parameters)  # Convert to named_tuple for const-ness
         self._check_run_parameter_consistency()
         
-        self.sampler_states = [MCMCSamplerState(self.thermodynamic_states[k].system, positions[k]) for k in range(len(self.thermodynamic_states))]
+        self.sampler_states = [MCMCSamplerState(self.thermodynamic_states[k].system, positions[k], self.platform) for k in range(len(self.thermodynamic_states))]
 
 
     def run(self):
@@ -457,6 +457,7 @@ class ReplicaExchange(object):
         
         logger.debug("Computing energies...")
         
+        # TODO: Parallel implementation.
         # Compute energies for this node's share of states.
         for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
             for replica_index in range(self.n_states):
@@ -819,7 +820,7 @@ class ReplicaExchange(object):
         return repex
     
 
-def resume(filename, mpicomm=None):
+def resume(filename, platform=None, mpicomm=None):
     """Resume an existing ReplicaExchange (or subclass) simulation.
     
     Parameters
@@ -856,6 +857,7 @@ def resume(filename, mpicomm=None):
     parameters = mpicomm.bcast(parameters, root=0)
     
     cls = find_matching_subclass(ReplicaExchange, repex_classname)
-    
-    repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm, parameters=parameters)
+
+    repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm, platform=platform, parameters=parameters)
+
     return repex
