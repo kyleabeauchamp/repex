@@ -62,26 +62,12 @@ class ParallelTempering(ReplicaExchange):
         start_time = time.time()
         logger.debug("Computing energies...")
                 
-        for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
-            context = self.sampler_states[replica_index].createContext(platform=self.platform)
-            # Compute potential energy.
-            openmm_state = context.getState(getEnergy=True)            
-            potential_energy = openmm_state.getPotentialEnergy()           
-            # Compute energies at this state for all replicas.
+        for replica_index in range(self.n_states):
+            potential_energy = self.sampler_states[replica_index].potential_energy
             for state_index in range(self.n_states):
                 # Compute reduced potential
                 beta = 1.0 / (kB * self.thermodynamic_states[state_index].temperature)
                 self.u_kl[replica_index,state_index] = beta * potential_energy
-
-        # Gather energies.
-        energies_gather = self.mpicomm.allgather(self.u_kl[self.mpicomm.rank:self.n_states:self.mpicomm.size,:])
-        for replica_index in range(self.n_states):
-            source = replica_index % self.mpicomm.size # node with trajectory data
-            index = replica_index // self.mpicomm.size # index within trajectory batch
-            self.u_kl[replica_index,:] = energies_gather[source][index]
-
-        # Clean up.
-        del context
 
         end_time = time.time()
         elapsed_time = end_time - start_time
