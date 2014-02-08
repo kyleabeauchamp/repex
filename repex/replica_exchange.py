@@ -3,6 +3,7 @@ import datetime
 
 import numpy as np
 import pandas as pd
+import copy
 
 import simtk.unit as units
 
@@ -778,11 +779,12 @@ class ReplicaExchange(object):
             Provided keywords will be matched to object variables to replace defaults.
             
         """    
+        coordinates = validate_coordinates(coordinates, thermodynamic_states)
+
         if mpicomm is None or (mpicomm.rank == 0):
             database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates)  # To do: eventually use factory for looking up database type via filename
         else:
             database = None
-
 
         sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]        
         
@@ -831,3 +833,25 @@ def resume(filename, mpicomm=None):
     
     repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm, parameters=parameters)
     return repex
+
+
+def validate_coordinates(coordinates, thermodynamic_states):
+    n_coord = len(coordinates)
+    n_states = len(thermodynamic_states)
+
+    if n_coord == 0 or n_states == 0:
+        raise(Exception("Must have at least one state and coordinates."))
+
+    if n_coord > n_states:
+        raise(Exception("Cannot input more coordinates than states."))
+
+    elif n_coord < n_states:
+        logger.info("Input %d coordinates but %d states, so copying additional coordinates." % (n_coord, n_states))
+        new_coordinates = []
+        for i in range(n_states):
+            new_coordinates.append(copy.deepcopy(coordinates[i % n_coord]))
+    
+    elif n_coord == n_states:
+        new_coordinates = coordinates
+
+    return new_coordinates
