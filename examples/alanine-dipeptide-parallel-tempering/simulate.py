@@ -2,7 +2,7 @@
 Example illustrating the parallel tempering facility of repex.
 
 This example loads the PDB file for a terminally-blocked alanine peptide and parameterizes it
-using the amber10 collection of forcefield parameters.  An implicit solvent (OBC) is used.
+using the amber10 collection of forcefield parameters.
 
 """
 
@@ -55,7 +55,7 @@ if not resume:
     
     # Load forcefield.
     from simtk.openmm import app
-    forcefield = app.ForceField("amber10.xml", "amber10_obc.xml")
+    forcefield = app.ForceField("amber10.xml")
 
     # Load PDB file.
     pdb_filename = 'alanine-dipeptide.pdb'

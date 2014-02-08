@@ -331,7 +331,10 @@ class ReplicaExchange(object):
         thermodynamic_state = self.thermodynamic_states[state_index] # thermodynamic state
         sampler_state = self.sampler_states[replica_index]
         
-        sampler = mcmc.MCMCSampler(thermodynamic_state, move_set=[mcmc.LangevinDynamicsMove(nsteps=self.parameters.nsteps_per_iteration, timestep=self.current_timestep, collision_rate=self.parameters.collision_rate)])
+        # HACK: Use Langevin dynamics move.
+        move_set = [mcmc.LangevinDynamicsMove(nsteps=self.parameters.nsteps_per_iteration, timestep=self.current_timestep, collision_rate=self.parameters.collision_rate)]
+
+        sampler = mcmc.MCMCSampler(thermodynamic_state, move_set=move_set, platform=self.platform)
         new_sampler_state = sampler.run(sampler_state)
         
         self.sampler_states[replica_index] = new_sampler_state
