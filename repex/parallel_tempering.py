@@ -3,6 +3,7 @@ import time
 import numpy as np
 
 from thermodynamics import ThermodynamicState
+import replica_exchange
 from replica_exchange import ReplicaExchange
 import netcdf_io
 from mcmc import MCMCSamplerState
@@ -138,11 +139,12 @@ class ParallelTempering(ReplicaExchange):
 
         thermodynamic_states = [ ThermodynamicState(system=system, temperature=temperatures[i], pressure=pressure) for i in range(n_temps) ]
     
+        coordinates = validate_coordinates(coordinates, thermodynamic_states)    
+    
         if mpicomm is None or (mpicomm.rank == 0):
             database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates)  # To do: eventually use factory for looking up database type via filename
         else:
             database = None
-        
         
         sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
         repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, parameters=parameters)
