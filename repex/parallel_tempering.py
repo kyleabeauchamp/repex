@@ -139,7 +139,7 @@ class ParallelTempering(ReplicaExchange):
 
         thermodynamic_states = [ ThermodynamicState(system=system, temperature=temperatures[i], pressure=pressure) for i in range(n_temps) ]
     
-        coordinates = validate_coordinates(coordinates, thermodynamic_states)    
+        coordinates = replica_exchange.validate_coordinates(coordinates, thermodynamic_states)    
     
         if mpicomm is None or (mpicomm.rank == 0):
             database = netcdf_io.NetCDFDatabase(filename, thermodynamic_states, coordinates)  # To do: eventually use factory for looking up database type via filename
