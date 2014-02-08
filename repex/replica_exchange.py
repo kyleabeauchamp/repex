@@ -789,7 +789,7 @@ class ReplicaExchange(object):
         logger.info("\n%-24s %16s\n%s" % ("reduced potential (kT)", "current state", U.to_string()))
 
     @classmethod
-    def create(cls, thermodynamic_states, coordinates, filename, mpicomm=None, parameters={}):
+    def create(cls, thermodynamic_states, coordinates, filename, mpicomm=None, platform=None, parameters={}):
         """Create a new ReplicaExchange simulation.
         
         Parameters
@@ -803,7 +803,9 @@ class ReplicaExchange(object):
             name of NetCDF file to bind to for simulation output and checkpointing
         mpicomm : mpi4py communicator, default=None
             MPI communicator, if parallel execution is desired.      
-        kwargs (dict) - Optional parameters to use for specifying simulation
+        platform : simtk.openmm.Platform, optional
+            Platform to use for simulations, or None if default is to be used.
+        parameters (dict) - Optional parameters to use for specifying simulation
             Provided keywords will be matched to object variables to replace defaults.
             
         """    
@@ -813,9 +815,9 @@ class ReplicaExchange(object):
             database = None
 
 
-        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]        
+        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k], platform=self.platform) for k in range(len(thermodynamic_states))]        
         
-        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, parameters=parameters)
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, platform=self.platform, parameters=parameters)
         repex._run_iteration_zero()
         return repex
     

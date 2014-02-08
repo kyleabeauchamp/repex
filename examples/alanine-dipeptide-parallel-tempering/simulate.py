@@ -38,6 +38,7 @@ if resume:
         # Extend the simulation by a few iterations.
         niterations_to_extend = 10
         simulation.extend(niterations_to_extend)    
+
     except Exception as e:
         print "Could not resume existing simulation due to exception:"
         print e
