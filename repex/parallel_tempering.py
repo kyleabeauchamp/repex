@@ -63,7 +63,7 @@ class ParallelTempering(ReplicaExchange):
         logger.debug("Computing energies...")
                 
         for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
-            context = self.sampler_states[replica_index].createContext()
+            context = self.sampler_states[replica_index].createContext(platform=self.platform)
             # Compute potential energy.
             openmm_state = context.getState(getEnergy=True)            
             potential_energy = openmm_state.getPotentialEnergy()           
