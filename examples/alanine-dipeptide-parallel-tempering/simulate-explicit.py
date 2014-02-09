@@ -21,7 +21,7 @@ output_filename = "repex.nc" # name of NetCDF file to store simulation output
 
 # Select simulation platform.
 from simtk import openmm
-platform = openmm.Platform.getPlatformByName("CPU")
+platform = openmm.Platform.getPlatformByName("CUDA")
 
 # If simulation file already exists, try to resume.
 import os.path
@@ -60,7 +60,7 @@ if not resume:
     
     # Load forcefield.
     from simtk.openmm import app
-    forcefield = app.ForceField("amber10.xml")
+    forcefield = app.ForceField("amber10.xml", "tip3p.xml")
 
     # Load PDB file.
     pdb_filename = 'alanine-dipeptide.pdb'
@@ -68,15 +68,17 @@ if not resume:
 
     # Create a model containing all atoms from PDB file.
     model = app.modeller.Modeller(pdb.topology, pdb.positions)
+    model.addSolvent(forcefield, padding=9.0*unit.angstroms) 
 
     # Create OpenMM system and retrieve atomic positions.
-    system = forcefield.createSystem(model.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+    system = forcefield.createSystem(model.topology, nonbondedMethod=app.CutoffPeriodic, constraints=app.HBonds)
     replica_positions = [model.positions for i in range(n_temps)] # number of replica positions as input must match number of replicas
 
     # Create parallel tempering simulation object.
     import repex
     mpicomm = repex.dummympi.DummyMPIComm()
     parameters = {"number_of_iterations" : 10}
+    parameters = {"collision_rate" : collision_rate}
     from repex import ParallelTempering
     simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, platform=platform, parameters=parameters)
 
