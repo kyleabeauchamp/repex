@@ -39,7 +39,7 @@ class HamiltonianExchange(ReplicaExchange):
 
 
     @classmethod
-    def create(cls, reference_state, systems, coordinates, filename, mpicomm=None, parameters={}):
+    def create(cls, reference_state, systems, coordinates, filename, mpicomm=None, platform=None, parameters={}):
         """Create a new Hamiltonian exchange simulation object.
 
         Parameters

@@ -815,9 +815,9 @@ class ReplicaExchange(object):
             database = None
 
 
-        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k], platform=self.platform) for k in range(len(thermodynamic_states))]        
+        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]        
         
-        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, platform=self.platform, parameters=parameters)
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, platform=platform, parameters=parameters)
         repex._run_iteration_zero()
         return repex
     
