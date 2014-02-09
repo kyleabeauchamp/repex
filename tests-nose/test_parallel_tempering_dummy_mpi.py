@@ -10,6 +10,30 @@ import tempfile
 from mdtraj.testing import eq
 
 
+def test_parallel_tempering_pressure():
+    nc_filename = tempfile.mkdtemp() + "/out.nc"
+
+    T_min = 1.0 * unit.kelvin
+    T_max = 10.0 * unit.kelvin
+    n_temps = 3
+    pressure = 1.0 * unit.atmospheres
+
+    ho = testsystems.HarmonicOscillator()
+
+    system = ho.system
+    positions = ho.positions
+
+
+    coordinates = [positions] * n_temps
+
+    mpicomm = dummympi.DummyMPIComm()
+    parameters = {"number_of_iterations":4}
+    replica_exchange = ParallelTempering.create(system, coordinates, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, pressure=pressure, mpicomm=mpicomm, parameters=parameters)
+    
+    eq(replica_exchange.n_replicas, n_temps)
+
+    replica_exchange.run()
+
 def test_parallel_tempering():
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
