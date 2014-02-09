@@ -37,16 +37,35 @@ class ParallelTempering(ReplicaExchange):
 
     def _check_self_consistency(self, thermodynamic_states):
         """Checks that each state is identical except for the temperature, as required for ParallelTempering."""
-        
+
         for s0 in thermodynamic_states:
             for s1 in thermodynamic_states:
                 if s0.pressure != s1.pressure:
                     raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different pressures!"))
 
+
+        # Now we do a little hack where we temporarily set all the barostat temperatures to zero
+        # So that the system objects can be compared for equality modulo barostat temperature.  
+        # Afterwards we reset the temperatures to the input values
+
+        temperatures = [s0.temperature for s0 in thermodynamic_states]  # Keep track of initial temperatures
+
+        def set_barostat_temperature(state, temperature):
+            forces = state.system.getForces()
+            for f in forces:
+                if f.__class__.__name__ == "MonteCarloBarostat":
+                    f.setTemperature(temperature)
+
+        for s0 in thermodynamic_states:
+            set_barostat_temperature(s0, 0.0)
+
         for s0 in thermodynamic_states:
             for s1 in thermodynamic_states:
                 if s0.system.__getstate__() != s1.system.__getstate__():
                     raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different systems!"))
+
+        for k, s0 in enumerate(thermodynamic_states):
+            set_barostat_temperature(s0, temperatures[k])
 
 
     def _compute_energies(self):
