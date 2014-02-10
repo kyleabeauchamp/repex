@@ -117,3 +117,30 @@ def test_check_mbar():
     db = replica_exchange.database
     db.estimate_enthalpies()
     db.run_mbar()
+
+def test_output_diagnostics():
+    tempdir = tempfile.mkdtemp()
+    nc_filename = tempdir + "/out.nc"
+
+    T_min = 1.0 * unit.kelvin
+    T_i = [T_min, T_min * 10., T_min * 100.]
+    n_replicas = len(T_i)
+
+    ho = testsystems.HarmonicOscillator()
+
+    system = ho.system
+    positions = ho.positions
+
+    states = [ ThermodynamicState(system=system, temperature=T_i[i]) for i in range(n_replicas) ]
+
+    coordinates = [positions] * n_replicas
+
+    mpicomm = dummympi.DummyMPIComm()
+    parameters = {"number_of_iterations":10}
+    replica_exchange = ReplicaExchange.create(states, coordinates, nc_filename, mpicomm=mpicomm, parameters=parameters)
+    replica_exchange.run()
+
+    db = replica_exchange.database
+    db.check_energies()
+    
+    db.output_diagnostics(tempdir + "/diagnostics/")

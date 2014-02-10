@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 
@@ -374,3 +375,65 @@ class Analyzer(object):
         else:
             logger.info("\nPerron eigenvalue is %9.5f; state equilibration timescale is ~ %.1f iterations" % (mu[1], 1.0 / (1.0 - mu[1])))
 
+
+
+    def output_diagnostics(self, diagnostics_path):
+        """Create a directory, markdown file, and PDF containing replica exchange diagnostics.
+        """
+        try:
+            import matplotlib
+            # Force matplotlib to not use any Xwindows backend.
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as plt
+        except:
+            print("Cannot import matplotlib, skipping diagnostics output.")
+            return
+        
+        if not os.path.exists(diagnostics_path):
+            try:
+                os.mkdir(diagnostics_path)
+            except OSError:
+                print("Cannot create directory %s, skipping diagnostics output." % (diagnostics_path))
+                return
+
+        try:
+            os.mkdir(diagnostics_path + "/figures/")
+        except OSError:
+            print("Cannot create directory %s, skipping diagnostics output." % (diagnostics_path + "/figures/"))
+            return
+
+        plt.plot(range(10))
+        plt.savefig(diagnostics_path + "/figures/test.png")
+        
+        plt.plot(range(20))
+        plt.savefig(diagnostics_path + "/figures/test2.png")
+        
+        s = """
+        ============================
+        Replica Exchange Diagnostics
+        ============================
+        
+        .. image:: %s/test.png
+        
+        Still more 
+
+        .. image:: %s/test2.png
+
+        """ % ("figures/", "figures/")
+        
+        f = open(diagnostics_path + "/diagnostics.rst", "w")
+        f.write(s)
+        f.close()
+
+        current = os.getcwd()
+        try:
+            os.chdir(diagnostics_path)
+            logger.info("Temporarily changing directory from %s to %s to run pandoc." % (current, diagnostics_path))
+            os.system("pandoc diagnostics.rst -o diagnostics.pdf")
+            logger.info("Finished running pandoc")
+        except:
+            pass
+        finally:
+            logger.info("Changing back from %s to %s." % (diagnostics_path, current))
+            os.chdir(current)
+        
