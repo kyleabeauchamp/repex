@@ -6,7 +6,7 @@ from thermodynamics import ThermodynamicState
 import replica_exchange
 from replica_exchange import ReplicaExchange
 import netcdf_io
-from mcmc import MCMCSamplerState
+from mcmc import SamplerState
 
 import logging
 logger = logging.getLogger(__name__)
@@ -151,7 +151,7 @@ class ParallelTempering(ReplicaExchange):
         else:
             database = None
         
-        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]
+        sampler_states = [SamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]
         repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, platform=platform, parameters=parameters)
 
         # Override title.

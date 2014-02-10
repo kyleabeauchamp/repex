@@ -35,7 +35,7 @@ Construct a simple MCMC simulation using Langevin dynamics moves.
 >>> from thermodynamics import ThermodynamicState
 >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
 >>> # Create a sampler state.
->>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+>>> sampler_state = SamplerState(system=test.system, positions=test.positions)
 >>> # Create a move set.
 >>> move_set = [ HMCMove(nsteps=10), LangevinDynamicsMove(nsteps=10) ]
 >>> # Create MCMC sampler
@@ -102,7 +102,7 @@ _RANDOM_SEED_MAX = np.iinfo(np.int32).max # maximum random number seed value
 # MCMC sampler state
 #=============================================================================================
 
-class MCMCSamplerState(object):
+class SamplerState(object):
     """
     Sampler state for MCMC move representing everything that may be allowed to change during
     the simulation.
@@ -147,7 +147,7 @@ class MCMCSamplerState(object):
     >>> test = testsystems.LennardJonesFluid()
     >>> # Create a sampler state manually.
     >>> box_vectors = test.system.getDefaultPeriodicBoxVectors()
-    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions, box_vectors=box_vectors)
+    >>> sampler_state = SamplerState(system=test.system, positions=test.positions, box_vectors=box_vectors)
 
     Create a sampler state for a system without box vectors.
 
@@ -155,7 +155,7 @@ class MCMCSamplerState(object):
     >>> import testsystems
     >>> test = testsystems.LennardJonesCluster()
     >>> # Create a sampler state manually.
-    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+    >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
 
     TODO:
     * Can we remove the need to create a Context in initializing the sampler state by using the Reference platform and skipping energy calculations?
@@ -188,7 +188,7 @@ class MCMCSamplerState(object):
     @classmethod
     def createFromContext(cls, context):
         """
-        Create an MCMCSamplerState object from the information in a current OpenMM Context object.
+        Create an SamplerState object from the information in a current OpenMM Context object.
         
         Parameters
         ----------
@@ -197,7 +197,7 @@ class MCMCSamplerState(object):
            
         Returns
         -------
-        sampler_state : MCMCSamplerState
+        sampler_state : SamplerState
            The sampler state containing positions, velocities, and box vectors.
 
         Examples
@@ -216,7 +216,7 @@ class MCMCSamplerState(object):
         >>> context.setPositions(test.positions)
         >>> context.setVelocitiesToTemperature(298 * u.kelvin)
         >>> # Create a sampler state from the Context.
-        >>> sampler_state = MCMCSamplerState.createFromContext(context)
+        >>> sampler_state = SamplerState.createFromContext(context)
         >>> # Clean up.
         >>> del context, integrator
 
@@ -225,7 +225,7 @@ class MCMCSamplerState(object):
         openmm_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True)
         
         # Create new object, bypassing init.
-        self = MCMCSamplerState.__new__(cls)
+        self = SamplerState.__new__(cls)
 
         # Populate context.
         self.system = copy.deepcopy(context.getSystem())
@@ -270,7 +270,7 @@ class MCMCSamplerState(object):
         >>> test = testsystems.LennardJonesFluid()
         >>> # Create a sampler state manually.
         >>> box_vectors = test.system.getDefaultPeriodicBoxVectors()
-        >>> sampler_state = MCMCSamplerState(positions=test.positions, box_vectors=box_vectors, system=test.system)
+        >>> sampler_state = SamplerState(positions=test.positions, box_vectors=box_vectors, system=test.system)
         >>> # Create a Context.
         >>> import simtk.openmm as mm
         >>> import simtk.unit as u
@@ -285,7 +285,7 @@ class MCMCSamplerState(object):
         >>> import testsystems
         >>> test = testsystems.LennardJonesCluster()
         >>> # Create a sampler state manually.
-        >>> sampler_state = MCMCSamplerState(positions=test.positions, system=test.system)
+        >>> sampler_state = SamplerState(positions=test.positions, system=test.system)
         >>> # Create a Context.
         >>> import simtk.openmm as mm
         >>> import simtk.unit as u
@@ -301,7 +301,7 @@ class MCMCSamplerState(object):
         """
 
         if not self.system:
-            raise Exception("MCMCSamplerState must have a 'system' object specified to create a Context")
+            raise Exception("SamplerState must have a 'system' object specified to create a Context")
 
         # Use a Verlet integrator if none is specified.
         if integrator is None:
@@ -372,7 +372,7 @@ class MCMCSamplerState(object):
         >>> import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
         >>> # Minimize
         >>> sampler_state.minimize()
 
@@ -380,7 +380,7 @@ class MCMCSamplerState(object):
 
         context = self.createContext(platform=platform)
         mm.LocalEnergyMinimizer.minimize(context) # DEBUG
-        sampler_state = MCMCSamplerState.createFromContext(context)
+        sampler_state = SamplerState.createFromContext(context)
         self.positions = sampler_state.positions
         self.potential_energy = sampler_state.potential_energy
         self.total_energy = sampler_state.total_energy
@@ -456,14 +456,14 @@ class MCMCMove(object):
         ----------
         thermodynamic_state : ThermodynamicState
            The thermodynamic state to use when applying the MCMC move
-        sampler_state : MCMCSamplerState
+        sampler_state : SamplerState
            The sampler state to apply the move to
         platform : simtk.openmm.Platform, optional, default = None
            The platform to use.
 
         Returns
         -------
-        updated_sampler_state : MCMCSamplerState
+        updated_sampler_state : SamplerState
            The updated sampler state
 
 
@@ -486,7 +486,7 @@ class MCMCSampler(object):
     >>> from thermodynamics import ThermodynamicState
     >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
     >>> # Create a sampler state.
-    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+    >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
     >>> # Create a move set specifying probabilities fo each type of move.
     >>> move_set = { HMCMove(nsteps=10) : 0.5, LangevinDynamicsMove(nsteps=10) : 0.5 }
     >>> # Create MCMC sampler
@@ -522,7 +522,7 @@ class MCMCSampler(object):
         >>> from thermodynamics import ThermodynamicState
         >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
 
         Create a move set specifying probabilities for each type of move.
 
@@ -572,7 +572,7 @@ class MCMCSampler(object):
         >>> from thermodynamics import ThermodynamicState
         >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
         >>> # Create a move set specifying probabilities fo each type of move.
         >>> move_set = { HMCMove(nsteps=10) : 0.5, LangevinDynamicsMove(nsteps=10) : 0.5 }
         >>> # Create MCMC sampler
@@ -636,7 +636,7 @@ class LangevinDynamicsMove(MCMCMove):
     >>> import testsystems
     >>> test = testsystems.AlanineDipeptideVacuum()
     >>> # Create a sampler state.
-    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+    >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
     >>> # Create a thermodynamic state.
     >>> from thermodynamics import ThermodynamicState
     >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
@@ -695,14 +695,14 @@ class LangevinDynamicsMove(MCMCMove):
         ----------
         thermodynamic_state : ThermodynamicState
            The thermodynamic state to use when applying the MCMC move
-        sampler_state : MCMCSamplerState
+        sampler_state : SamplerState
            The sampler state to apply the move to
         platform : simtk.openmm.Platform, optional, default = None
            If not None, the specified platform will be used.
 
         Returns
         -------
-        updated_sampler_state : MCMCSamplerState
+        updated_sampler_state : SamplerState
            The updated sampler state
 
         Examples
@@ -714,7 +714,7 @@ class LangevinDynamicsMove(MCMCMove):
         >>> import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
         >>> # Create a thermodynamic state.
         >>> from thermodynamics import ThermodynamicState
         >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
@@ -732,7 +732,7 @@ class LangevinDynamicsMove(MCMCMove):
         >>> barostat = mm.MonteCarloBarostat(1*u.atmospheres, 298*u.kelvin, 25)
         >>> force_index = test.system.addForce(barostat)
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
         >>> # Create a thermodynamic state.
         >>> from thermodynamics import ThermodynamicState
         >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
@@ -782,7 +782,7 @@ class LangevinDynamicsMove(MCMCMove):
 
         # Get updated sampler state.
         state_update_initial_time = time.time()
-        updated_sampler_state = MCMCSamplerState.createFromContext(context)
+        updated_sampler_state = SamplerState.createFromContext(context)
         state_update_final_time = time.time()
 
         # Clean up.
@@ -821,7 +821,7 @@ class GHMCMove(MCMCMove):
     >>> import testsystems
     >>> test = testsystems.AlanineDipeptideVacuum()
     >>> # Create a sampler state.
-    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+    >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
     >>> # Minimize.
     >>> sampler_state.minimize()
     >>> # Create a thermodynamic state.
@@ -882,7 +882,7 @@ class GHMCMove(MCMCMove):
         >>> import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
         >>> # Create a thermodynamic state.
         >>> from thermodynamics import ThermodynamicState
         >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
@@ -922,7 +922,7 @@ class GHMCMove(MCMCMove):
         >>> import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
         >>> # Create a thermodynamic state.
         >>> from thermodynamics import ThermodynamicState
         >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
@@ -947,14 +947,14 @@ class GHMCMove(MCMCMove):
         ----------
         thermodynamic_state : ThermodynamicState
            The thermodynamic state to use when applying the MCMC move
-        sampler_state : MCMCSamplerState
+        sampler_state : SamplerState
            The sampler state to apply the move to
         platform : simtk.openmm.Platform, optional, default = None
            If not None, the specified platform will be used.
 
         Returns
         -------
-        updated_sampler_state : MCMCSamplerState
+        updated_sampler_state : SamplerState
            The updated sampler state
 
         Examples
@@ -964,7 +964,7 @@ class GHMCMove(MCMCMove):
         >>> import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
         >>> # Create a thermodynamic state.
         >>> from thermodynamics import ThermodynamicState
         >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
@@ -1001,7 +1001,7 @@ class GHMCMove(MCMCMove):
         
         # Get updated sampler state.
         state_update_initial_time = time.time()
-        updated_sampler_state = MCMCSamplerState.createFromContext(context)
+        updated_sampler_state = SamplerState.createFromContext(context)
         state_update_final_time = time.time()
         
         # Accumulate acceptance statistics.
@@ -1045,7 +1045,7 @@ class HMCMove(MCMCMove):
     >>> import testsystems
     >>> test = testsystems.AlanineDipeptideVacuum()
     >>> # Create a sampler state.
-    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+    >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
     >>> # Create a thermodynamic state.
     >>> from thermodynamics import ThermodynamicState
     >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
@@ -1093,14 +1093,14 @@ class HMCMove(MCMCMove):
         ----------
         thermodynamic_state : ThermodynamicState
            The thermodynamic state to use when applying the MCMC move
-        sampler_state : MCMCSamplerState
+        sampler_state : SamplerState
            The sampler state to apply the move to
         platform : simtk.openmm.Platform, optional, default = None
            If not None, the specified platform will be used.
 
         Returns
         -------
-        updated_sampler_state : MCMCSamplerState
+        updated_sampler_state : SamplerState
            The updated sampler state
 
         Examples
@@ -1110,7 +1110,7 @@ class HMCMove(MCMCMove):
         >>> import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions)
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
         >>> # Create a thermodynamic state.
         >>> from thermodynamics import ThermodynamicState
         >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin)
@@ -1143,7 +1143,7 @@ class HMCMove(MCMCMove):
         
         # Get sampler state.
         state_update_initial_time = time.time()
-        updated_sampler_state = MCMCSamplerState.createFromContext(context)
+        updated_sampler_state = SamplerState.createFromContext(context)
         state_update_final_time = time.time()
 
         # Clean up.
@@ -1177,7 +1177,7 @@ class MonteCarloBarostatMove(MCMCMove):
     >>> import testsystems
     >>> test = testsystems.IdealGas()
     >>> # Create a sampler state.
-    >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions, box_vectors=test.system.getDefaultPeriodicBoxVectors())
+    >>> sampler_state = SamplerState(system=test.system, positions=test.positions, box_vectors=test.system.getDefaultPeriodicBoxVectors())
     >>> # Create a thermodynamic state.
     >>> from thermodynamics import ThermodynamicState
     >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin, pressure=1*u.atmospheres)
@@ -1225,14 +1225,14 @@ class MonteCarloBarostatMove(MCMCMove):
         ----------
         thermodynamic_state : ThermodynamicState
            The thermodynamic state to use when applying the MCMC move
-        sampler_state : MCMCSamplerState
+        sampler_state : SamplerState
            The sampler state to apply the move to
         platform : simtk.openmm.Platform, optional, default = None
            If not None, the specified platform will be used.
 
         Returns
         -------
-        updated_sampler_state : MCMCSamplerState
+        updated_sampler_state : SamplerState
            The updated sampler state
 
         Examples
@@ -1242,7 +1242,7 @@ class MonteCarloBarostatMove(MCMCMove):
         >>> import testsystems
         >>> test = testsystems.LennardJonesFluid()
         >>> # Create a sampler state.
-        >>> sampler_state = MCMCSamplerState(system=test.system, positions=test.positions, box_vectors=test.system.getDefaultPeriodicBoxVectors())
+        >>> sampler_state = SamplerState(system=test.system, positions=test.positions, box_vectors=test.system.getDefaultPeriodicBoxVectors())
         >>> # Create a thermodynamic state.
         >>> from thermodynamics import ThermodynamicState
         >>> thermodynamic_state = ThermodynamicState(system=test.system, temperature=298*u.kelvin, pressure=1*u.atmospheres)
@@ -1294,7 +1294,7 @@ class MonteCarloBarostatMove(MCMCMove):
         
         # Get sampler state.
         state_update_initial_time = time.time()
-        updated_sampler_state = MCMCSamplerState.createFromContext(context)
+        updated_sampler_state = SamplerState.createFromContext(context)
         state_update_final_time = time.time()
 
         # DEBUG

@@ -9,7 +9,7 @@ import simtk.unit as units
 
 import thermodynamics
 from utils import find_matching_subclass, dict_to_named_tuple
-from mcmc import MCMCSamplerState
+from mcmc import SamplerState
 import mcmc
 import citations
 import netcdf_io
@@ -48,7 +48,7 @@ class ReplicaExchange(object):
         ----------
         thermodynamic_states : list of ThermodynamicState objects
             List of thermodynamic states to simulate.
-        sampler_states : list of MCMCSamplerState objects, optional?
+        sampler_states : list of SamplerState objects, optional?
             List of MCMC sampler states to initialize replica exchange simulations with.
         database : Database object, optional
             Database to use to write/append simulation data to.
@@ -206,7 +206,7 @@ class ReplicaExchange(object):
         self.parameters = dict_to_named_tuple(self.parameters)  # Convert to named_tuple for const-ness
         self._check_run_parameter_consistency()
         
-        self.sampler_states = [MCMCSamplerState(self.thermodynamic_states[k].system, positions[k], self.platform) for k in range(len(self.thermodynamic_states))]
+        self.sampler_states = [SamplerState(self.thermodynamic_states[k].system, positions[k], self.platform) for k in range(len(self.thermodynamic_states))]
 
 
     def run(self):
@@ -812,7 +812,7 @@ class ReplicaExchange(object):
         else:
             database = None
 
-        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]        
+        sampler_states = [SamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]        
         
         repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, platform=platform, parameters=parameters)
         repex._run_iteration_zero()
