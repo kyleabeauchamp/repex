@@ -72,6 +72,8 @@ class ThermodynamicState(object):
     
     Note that the pressure is only relevant for periodic systems.
 
+    A barostat will be added to the system if none is attached.
+
     Notes
     -----
 

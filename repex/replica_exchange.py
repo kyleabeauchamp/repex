@@ -34,16 +34,37 @@ class ReplicaExchange(object):
     default_parameters["minimize"] = True 
     default_parameters["minimize_tolerance"] = 1.0 * units.kilojoules_per_mole / units.nanometers # if specified, set minimization tolerance
     default_parameters["minimize_maxIterations"] = 0 # if nonzero, set maximum iterations
-    default_parameters["platform"] = None
     default_parameters["replica_mixing_scheme"] = 'swap-all' # mix all replicas thoroughly
     default_parameters["online_analysis"] = False # if True, analysis will occur each iteration
     default_parameters["show_energies"] = True
     default_parameters["show_mixing_statistics"] = True
-    default_parameters["platform"] = None
     default_parameters["integrator"] = None
 
-    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, parameters={}):
+    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, platform=None, parameters={}):
         """
+        Create a new ReplicaExchange simulation object.
+        
+        Parameters
+        ----------
+        thermodynamic_states : list of ThermodynamicState objects
+            List of thermodynamic states to simulate.
+        sampler_states : list of MCMCSamplerState objects, optional?
+            List of MCMC sampler states to initialize replica exchange simulations with.
+        database : Database object, optional
+            Database to use to write/append simulation data to.
+        mpicomm : mpicomm implementation, optional?
+            Communicator (real or dummy) implementation to use for parallelization.
+        platform : simtk.openmm.Platform, optional, default None
+            Platform to use for execution.
+
+        Notes
+        -----
+        
+        Use ReplicaExchange.create() to create a new repex simulation.  
+        To resume an existing ReplicaExchange (or subclass) simulation,
+        use the `resume()` function.  In general, you will not need to
+        directory call the ReplicaExchange() constructor.
+        
         """
         
         if mpicomm is None:
@@ -51,10 +72,10 @@ class ReplicaExchange(object):
         else:
             self.mpicomm = mpicomm
 
+        self.platform = platform
         self.database = database
         self.thermodynamic_states = thermodynamic_states
-        
-        
+                
         self.n_states = len(self.thermodynamic_states)
         self.n_atoms = self.thermodynamic_states[0].system.getNumParticles()        
         
@@ -72,8 +93,7 @@ class ReplicaExchange(object):
             self._allocate_arrays()
         else:  # Resume repex job
             self._broadcast_database()
-
-        self.platform = self.parameters.platform  # For convenience
+        
         self.current_timestep = self.parameters.timestep
         
         self.n_replicas = len(self.thermodynamic_states)  # Determine number of replicas from the number of specified thermodynamic states.
@@ -186,7 +206,7 @@ class ReplicaExchange(object):
         self.parameters = dict_to_named_tuple(self.parameters)  # Convert to named_tuple for const-ness
         self._check_run_parameter_consistency()
         
-        self.sampler_states = [MCMCSamplerState(self.thermodynamic_states[k].system, positions[k]) for k in range(len(self.thermodynamic_states))]
+        self.sampler_states = [MCMCSamplerState(self.thermodynamic_states[k].system, positions[k], self.platform) for k in range(len(self.thermodynamic_states))]
 
 
     def run(self):
@@ -307,7 +327,10 @@ class ReplicaExchange(object):
         thermodynamic_state = self.thermodynamic_states[state_index] # thermodynamic state
         sampler_state = self.sampler_states[replica_index]
         
-        sampler = mcmc.MCMCSampler(thermodynamic_state, move_set=[mcmc.LangevinDynamicsMove(nsteps=self.parameters.nsteps_per_iteration, timestep=self.current_timestep, collision_rate=self.parameters.collision_rate)])
+        # HACK: Use Langevin dynamics move.
+        move_set = [mcmc.LangevinDynamicsMove(nsteps=self.parameters.nsteps_per_iteration, timestep=self.current_timestep, collision_rate=self.parameters.collision_rate)]
+
+        sampler = mcmc.MCMCSampler(thermodynamic_state, move_set=move_set, platform=self.platform)
         new_sampler_state = sampler.run(sampler_state)
         
         self.sampler_states[replica_index] = new_sampler_state
@@ -392,7 +415,7 @@ class ReplicaExchange(object):
 
     def _minimize_all_replicas(self):
         for replica_index in range(self.n_states):
-            self.sampler_states[replica_index].minimize()
+            self.sampler_states[replica_index].minimize(platform=self.platform)
             
     def _minimize_and_equilibrate(self):
         """
@@ -430,6 +453,7 @@ class ReplicaExchange(object):
         
         logger.debug("Computing energies...")
         
+        # TODO: Parallel implementation.
         # Compute energies for this node's share of states.
         for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
             for replica_index in range(self.n_states):
@@ -761,7 +785,7 @@ class ReplicaExchange(object):
         logger.info("\n%-24s %16s\n%s" % ("reduced potential (kT)", "current state", U.to_string()))
 
     @classmethod
-    def create(cls, thermodynamic_states, coordinates, filename, mpicomm=None, parameters={}):
+    def create(cls, thermodynamic_states, coordinates, filename, mpicomm=None, platform=None, parameters={}):
         """Create a new ReplicaExchange simulation.
         
         Parameters
@@ -775,7 +799,9 @@ class ReplicaExchange(object):
             name of NetCDF file to bind to for simulation output and checkpointing
         mpicomm : mpi4py communicator, default=None
             MPI communicator, if parallel execution is desired.      
-        kwargs (dict) - Optional parameters to use for specifying simulation
+        platform : simtk.openmm.Platform, optional
+            Platform to use for simulations, or None if default is to be used.
+        parameters (dict) - Optional parameters to use for specifying simulation
             Provided keywords will be matched to object variables to replace defaults.
             
         """    
@@ -786,14 +812,14 @@ class ReplicaExchange(object):
         else:
             database = None
 
-        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]        
+        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]        
         
-        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, parameters=parameters)
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, platform=platform, parameters=parameters)
         repex._run_iteration_zero()
         return repex
     
 
-def resume(filename, mpicomm=None):
+def resume(filename, platform=None, mpicomm=None):
     """Resume an existing ReplicaExchange (or subclass) simulation.
     
     Parameters
@@ -830,8 +856,9 @@ def resume(filename, mpicomm=None):
     parameters = mpicomm.bcast(parameters, root=0)
     
     cls = find_matching_subclass(ReplicaExchange, repex_classname)
-    
-    repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm, parameters=parameters)
+
+    repex = cls(thermodynamic_states, database=database, mpicomm=mpicomm, platform=platform, parameters=parameters)
+
     return repex
 
 

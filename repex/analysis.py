@@ -379,7 +379,21 @@ class Analyzer(object):
 
     def output_diagnostics(self, diagnostics_path):
         """Create a directory, markdown file, and PDF containing replica exchange diagnostics.
+        
+        Parameters
+        ----------
+        
+        diagnostics_path : str
+            Path of directory to use for diagnostics output.
+            
+        Notes
+        -----
+        
+        This function is presently incomplete and outputs placeholder
+        images in the diagnostics PDF!
+
         """
+
         try:
             import matplotlib
             # Force matplotlib to not use any Xwindows backend.

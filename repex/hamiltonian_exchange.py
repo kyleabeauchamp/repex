@@ -20,9 +20,9 @@ class HamiltonianExchange(ReplicaExchange):
     
     """
 
-    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, parameters={}):
+    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, platform=None, parameters={}):
         self._check_self_consistency(thermodynamic_states)
-        super(HamiltonianExchange, self).__init__(thermodynamic_states, sampler_states=sampler_states, database=database, mpicomm=mpicomm, parameters=parameters)
+        super(HamiltonianExchange, self).__init__(thermodynamic_states, sampler_states=sampler_states, database=database, mpicomm=mpicomm, platform=platform, parameters=parameters)
 
     def _check_self_consistency(self, thermodynamic_states):
         """Checks that each state has the same temperature and pressure, as required for HamiltonianExchange."""
@@ -39,7 +39,7 @@ class HamiltonianExchange(ReplicaExchange):
 
 
     @classmethod
-    def create(cls, reference_state, systems, coordinates, filename, mpicomm=None, parameters={}):
+    def create(cls, reference_state, systems, coordinates, filename, mpicomm=None, platform=None, parameters={}):
         """Create a new Hamiltonian exchange simulation object.
 
         Parameters
@@ -71,4 +71,4 @@ class HamiltonianExchange(ReplicaExchange):
         """
       
         thermodynamic_states = [ ThermodynamicState(system=system, temperature=reference_state.temperature, pressure=reference_state.pressure) for system in systems ]
-        return super(cls, HamiltonianExchange).create(thermodynamic_states, coordinates, filename, mpicomm=mpicomm, parameters=parameters)
+        return super(cls, HamiltonianExchange).create(thermodynamic_states, coordinates, filename, mpicomm=mpicomm, platform=platform, parameters=parameters)

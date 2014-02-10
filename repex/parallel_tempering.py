@@ -32,22 +32,41 @@ class ParallelTempering(ReplicaExchange):
     
     """
 
-    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, parameters={}):
+    def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, platform=None, parameters={}):
         self._check_self_consistency(thermodynamic_states)
-        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states=sampler_states, database=database, mpicomm=mpicomm, parameters=parameters)
+        super(ParallelTempering, self).__init__(thermodynamic_states, sampler_states=sampler_states, database=database, mpicomm=mpicomm, platform=platform, parameters=parameters)
 
     def _check_self_consistency(self, thermodynamic_states):
         """Checks that each state is identical except for the temperature, as required for ParallelTempering."""
-        
+
         for s0 in thermodynamic_states:
             for s1 in thermodynamic_states:
                 if s0.pressure != s1.pressure:
                     raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different pressures!"))
 
+
+        # Now we do a little hack where we temporarily set all the barostat temperatures to zero
+        # So that the system objects can be compared for equality modulo barostat temperature.  
+        # Afterwards we reset the temperatures to the input values
+
+        temperatures = [s0.temperature for s0 in thermodynamic_states]  # Keep track of initial temperatures
+
+        def set_barostat_temperature(state, temperature):
+            forces = state.system.getForces()
+            for f in forces:
+                if f.__class__.__name__ == "MonteCarloBarostat":
+                    f.setTemperature(temperature)
+
+        for s0 in thermodynamic_states:
+            set_barostat_temperature(s0, 0.0)
+
         for s0 in thermodynamic_states:
             for s1 in thermodynamic_states:
                 if s0.system.__getstate__() != s1.system.__getstate__():
                     raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different systems!"))
+
+        for k, s0 in enumerate(thermodynamic_states):
+            set_barostat_temperature(s0, temperatures[k])
 
 
     def _compute_energies(self):
@@ -63,26 +82,12 @@ class ParallelTempering(ReplicaExchange):
         start_time = time.time()
         logger.debug("Computing energies...")
                 
-        for replica_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
-            context = self.sampler_states[replica_index].createContext()
-            # Compute potential energy.
-            openmm_state = context.getState(getEnergy=True)            
-            potential_energy = openmm_state.getPotentialEnergy()           
-            # Compute energies at this state for all replicas.
+        for replica_index in range(self.n_states):
+            potential_energy = self.sampler_states[replica_index].potential_energy
             for state_index in range(self.n_states):
                 # Compute reduced potential
                 beta = 1.0 / (kB * self.thermodynamic_states[state_index].temperature)
                 self.u_kl[replica_index,state_index] = beta * potential_energy
-
-        # Gather energies.
-        energies_gather = self.mpicomm.allgather(self.u_kl[self.mpicomm.rank:self.n_states:self.mpicomm.size,:])
-        for replica_index in range(self.n_states):
-            source = replica_index % self.mpicomm.size # node with trajectory data
-            index = replica_index // self.mpicomm.size # index within trajectory batch
-            self.u_kl[replica_index,:] = energies_gather[source][index]
-
-        # Clean up.
-        del context
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -91,7 +96,7 @@ class ParallelTempering(ReplicaExchange):
 
 
     @classmethod
-    def create(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, parameters={}):
+    def create(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, platform=None, parameters={}):
         """Create a new ParallelTempering simulation.
         
         Parameters
@@ -146,8 +151,9 @@ class ParallelTempering(ReplicaExchange):
         else:
             database = None
         
-        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k]) for k in range(len(thermodynamic_states))]
-        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, parameters=parameters)
+        sampler_states = [MCMCSamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]
+        repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, platform=platform, parameters=parameters)
+
         # Override title.
         repex.title = 'Parallel tempering simulation created using ParallelTempering class of repex.py on %s' % time.asctime(time.localtime())        
 
