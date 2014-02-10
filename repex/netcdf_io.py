@@ -298,6 +298,7 @@ class NetCDFDatabase(Analyzer):
         setattr(ncvar, 'type', option_type.__name__)
 
     def _load_parameter(self, option_name):
+        """Load and return a single run parameter from netCDF file."""
         
         option_ncvar = self.ncfile.groups['options'].variables[option_name]
         # Get option value.

@@ -8,6 +8,9 @@ import tempfile
 from mdtraj.testing import eq, skipif
 import nose
 
+import logging
+logging.disable(logging.INFO)  # Logging is wacky with MPI-based nose tester
+
 test_mpi = True
 
 try:

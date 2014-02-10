@@ -32,3 +32,24 @@ from repex.replica_exchange import ReplicaExchange
 from repex.parallel_tempering import ParallelTempering
 from repex.hamiltonian_exchange import HamiltonianExchange
 
+try:
+    from mpi4py import MPI # MPI wrapper
+    mpicomm = MPI.COMM_WORLD
+except:
+    import dummympi
+    mpicomm = dummympi.DummyMPIComm()
+
+def _set_logging(mpicomm):
+    """Set the logging based on comm.rank.
+    
+    Notes
+    -----
+    This function will be hidden from the namespace.
+    """
+    import logging
+    if mpicomm.rank == 0:
+        logging.basicConfig(level=logging.DEBUG)  # Change this to INFO for public release!
+    else:  # By default, silence output from worker nodes
+        logging.basicConfig(level=logging.ERROR)
+
+_set_logging(mpicomm)

@@ -41,8 +41,7 @@ class ReplicaExchange(object):
     default_parameters["integrator"] = None
 
     def __init__(self, thermodynamic_states, sampler_states=None, database=None, mpicomm=None, platform=None, parameters={}):
-        """
-        Create a new ReplicaExchange simulation object.
+        """Create a ReplicaExchange simulation object.
         
         Parameters
         ----------
@@ -123,7 +122,7 @@ class ReplicaExchange(object):
         -------
         
         full_parameters : dict
-            Dictinoary containing user-input run parameters as well as 
+            Dictionary containing user-input run parameters as well as 
             default parameters for unspecified parameters.
         
         Notes
@@ -310,13 +309,17 @@ class ReplicaExchange(object):
     def _propagate_replica(self, replica_index):
         """Propagate the replica corresponding to the specified replica index.
 
-        ARGUMENTS
+        Parameters
+        ----------
+        
+        replica_index : int
+            The replica to propagate
 
-        replica_index (int) - the replica to propagate
+        Returns
+        -------
 
-        RETURNS
-
-        elapsed_time (float) - time (in seconds) to propagate replica
+        elapsed_time : float
+            time (in seconds) to propagate replica
 
         """
 
@@ -340,8 +343,10 @@ class ReplicaExchange(object):
         return elapsed_time
 
     def _propagate_replicas_mpi(self):
-        """
-        Propagate all replicas using MPI communicator.
+        """Propagate all replicas using MPI communicator.
+        
+        Notes
+        -----
 
         It is presumed all nodes have the correct configurations in the correct replica slots, but that state indices may be unsynchronized.
 
@@ -394,8 +399,7 @@ class ReplicaExchange(object):
 
         
     def _propagate_replicas(self):
-        """
-        Propagate all replicas.
+        """Propagate all replicas.
 
         TODO
 
@@ -414,14 +418,12 @@ class ReplicaExchange(object):
 
 
     def _minimize_all_replicas(self):
+        """Minimize all replicas."""
         for replica_index in range(self.n_states):
             self.sampler_states[replica_index].minimize(platform=self.platform)
             
     def _minimize_and_equilibrate(self):
-        """
-        Minimize and equilibrate all replicas.
-
-        """
+        """Minimize and equilibrate all replicas."""
 
         # Minimize
         if self.parameters.minimize:
@@ -439,8 +441,7 @@ class ReplicaExchange(object):
 
 
     def _compute_energies(self):
-        """
-        Compute energies of all replicas at all states.
+        """Compute energies of all replicas at all states.
 
         TODO
 
@@ -473,8 +474,7 @@ class ReplicaExchange(object):
 
 
     def _mix_all_replicas(self):
-        """
-        Attempt exchanges between all replicas to enhance mixing.
+        """Attempt exchanges between all replicas to enhance mixing.
 
         TODO
 
@@ -863,6 +863,24 @@ def resume(filename, platform=None, mpicomm=None):
 
 
 def validate_coordinates(coordinates, thermodynamic_states):
+    """Return coordinate set of length consistent with thermodynamic_states.
+    
+    Parameters
+    ----------
+    
+    coordinates : list 
+        List of input coordinate sets
+    thermodynamic_state : list (of ThermodynamicStates)
+        List of thermodynamic states
+    
+    Returns
+    -------
+    
+    new_coordinates : list
+        A list of coordinate sets of length n_states
+    
+    """
+    
     n_coord = len(coordinates)
     n_states = len(thermodynamic_states)
 

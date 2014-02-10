@@ -5,9 +5,13 @@ from repex.replica_exchange import ReplicaExchange
 from repex import testsystems
 from repex.utils import permute_energies
 from repex import resume
+import repex
 import tempfile
 from mdtraj.testing import eq, skipif
 import nose
+
+import logging
+logging.disable(logging.INFO)  # Logging is wacky with MPI-based nose tester
 
 test_mpi = True
 
@@ -60,7 +64,6 @@ def test_harmonic_oscillators(mpicomm):
 
 @mpitest(2)
 def test_harmonic_oscillators_save_and_load(mpicomm):
-
     nc_filename = tempfile.mkdtemp() + "/out.nc"
 
     T_min = 1.0 * unit.kelvin

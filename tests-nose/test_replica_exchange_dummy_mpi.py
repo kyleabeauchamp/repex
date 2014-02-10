@@ -8,9 +8,7 @@ from repex import dummympi
 from repex import resume
 import tempfile
 from mdtraj.testing import eq
-import logging
 
-logging.basicConfig(level=logging.DEBUG)
 
 def test_harmonic_oscillators():
     nc_filename = tempfile.mkdtemp() + "/out.nc"

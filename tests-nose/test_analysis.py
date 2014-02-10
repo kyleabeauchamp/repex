@@ -9,9 +9,6 @@ from repex import dummympi
 from repex import resume
 import tempfile
 from mdtraj.testing import eq, skipif
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
 
 
 def test_get_traj():
