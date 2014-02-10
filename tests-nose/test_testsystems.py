@@ -6,6 +6,7 @@ from repex import testsystems
 from repex import dummympi
 import tempfile
 from mdtraj.testing import eq, skipif
+import logging
 
 
 def test_properties_all_testsystems():
