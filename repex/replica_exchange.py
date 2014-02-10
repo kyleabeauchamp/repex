@@ -57,18 +57,13 @@ class ReplicaExchange(object):
         platform : simtk.openmm.Platform, optional, default None
             Platform to use for execution.
 
-        Examples
-        --------
+        Notes
+        -----
         
-        Create a replica exchange object for a harmonic oscillator.
-        
-        >>> # Create thermodynamic states.
-        >>> from thermodynamics import ThermodynamicState
-        >>> # Create a test system
-        >>> import testsystems
-        >>> test = testsystems.AlanineDipeptideVacuum()
-        >>> # Create sampler states.
-        >>> sampler_states = [MCMCSamplerState(system=test.system, positions=test.positions) for index in range(nreplicas)]
+        Use ReplicaExchange.create() to create a new repex simulation.  
+        To resume an existing ReplicaExchange (or subclass) simulation,
+        use the `resume()` function.  In general, you will not need to
+        directory call the ReplicaExchange() constructor.
         
         """
         
