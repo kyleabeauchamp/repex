@@ -28,3 +28,7 @@ contains a number of utilities required for Yank and other packages.
 
 from repex import testsystems
 from repex.replica_exchange import resume
+from repex.replica_exchange import ReplicaExchange
+from repex.parallel_tempering import ParallelTempering
+from repex.hamiltonian_exchange import HamiltonianExchange
+
