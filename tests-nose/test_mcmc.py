@@ -57,8 +57,8 @@ def subtest_mcmc_expectation(testsystem, move_set):
     sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
 
     # Create sampler state.
-    from repex.mcmc import MCMCSamplerState
-    sampler_state = MCMCSamplerState(system=testsystem.system, positions=testsystem.positions)
+    from repex.mcmc import SamplerState
+    sampler_state = SamplerState(system=testsystem.system, positions=testsystem.positions)
 
     # Equilibrate
     for iteration in range(nequil):

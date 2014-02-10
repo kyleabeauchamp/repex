@@ -146,9 +146,7 @@ class ThermodynamicState(object):
         return
 
     def _create_context(self, platform=None):
-        """
-        Create Integrator and Context objects if they do not already exist.
-        
+        """Create Integrator and Context objects if they do not already exist.
         """
 
         # Check if we already have a Context defined.

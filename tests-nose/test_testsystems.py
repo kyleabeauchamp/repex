@@ -8,7 +8,6 @@ import tempfile
 from mdtraj.testing import eq, skipif
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
 
 def test_properties_all_testsystems():
     testsystem_classes = testsystems.TestSystem.__subclasses__()

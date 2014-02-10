@@ -1,12 +1,12 @@
 ##############################################################################
-# yanktools
+# Repex
 #
 # Copyright 2012-2013 MSKCC and the Authors
 #
 # Authors: Kyle A. Beauchamp, John D. Chodera
 # Contributors:
 #
-# yanktools is free software: you can redistribute it and/or modify
+# Repex is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as
 # published by the Free Software Foundation, either version 2.1
 # of the License, or (at your option) any later version.
@@ -31,4 +31,26 @@ from repex.replica_exchange import resume
 from repex.replica_exchange import ReplicaExchange
 from repex.parallel_tempering import ParallelTempering
 from repex.hamiltonian_exchange import HamiltonianExchange
+from repex.netcdf_io import NetCDFDatabase
 
+
+def _set_logging():
+    """Set the logging based on comm.rank.
+    
+    Notes
+    -----
+    This function will be hidden from the namespace.
+    """
+    import logging
+    try:
+        from mpi4py import MPI # MPI wrapper
+        mpicomm = MPI.COMM_WORLD
+    except:
+        import dummympi
+        mpicomm = dummympi.DummyMPIComm()    
+    if mpicomm.rank == 0:
+        logging.basicConfig(level=logging.DEBUG)  # Change this to INFO for public release!
+    else:  # By default, silence output from worker nodes
+        logging.basicConfig(level=logging.ERROR)
+
+_set_logging()
