@@ -41,7 +41,7 @@ import simtk.unit
 import simtk.unit as units
 import simtk.openmm as mm
 
-from repex.utils import kB
+from repex.constants import kB
 
 
 #=============================================================================================
