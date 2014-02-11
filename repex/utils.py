@@ -1,5 +1,7 @@
+import time
 import os
 import collections
+from functools import wraps
 
 import numpy as np
 
@@ -10,11 +12,13 @@ from mdtraj.utils import ensure_type
 
 from pkg_resources import resource_filename
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
 
-
-def time_and_print(x):
-    return x
+TIMINGS = {}  # Global dictionary of stored timings, for debugging purposes
 
 def fix_coordinates(coordinates):
     if type(coordinates) in [type(list()), type(set())]:
@@ -97,3 +101,4 @@ def find_matching_subclass(cls, name):
         if sub.__name__ == name:
             return sub
     raise(TypeError("Cannot find matching subclass!"))
+

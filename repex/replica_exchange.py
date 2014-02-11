@@ -9,6 +9,7 @@ import simtk.unit as units
 
 import thermodynamics
 from utils import find_matching_subclass, dict_to_named_tuple
+from timing import benchmark
 from mcmc import SamplerState
 import mcmc
 import citations
@@ -305,7 +306,8 @@ class ReplicaExchange(object):
         """Clean up, closing files.
         """
         self._finalize()
-        
+
+    @benchmark
     def _propagate_replica(self, replica_index):
         """Propagate the replica corresponding to the specified replica index.
 
@@ -323,8 +325,6 @@ class ReplicaExchange(object):
 
         """
 
-        start_time = time.time()
-
         # Retrieve state.
         state_index = self.replica_states[replica_index] # index of thermodynamic state that current replica is assigned to
         thermodynamic_state = self.thermodynamic_states[state_index] # thermodynamic state
@@ -337,10 +337,7 @@ class ReplicaExchange(object):
         new_sampler_state = sampler.run(sampler_state)
         
         self.sampler_states[replica_index] = new_sampler_state
-        
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        return elapsed_time
+
 
     def _propagate_replicas_mpi(self):
         """Propagate all replicas using MPI communicator.
