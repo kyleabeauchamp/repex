@@ -1,7 +1,5 @@
-import time
 import os
 import collections
-from functools import wraps
 
 import numpy as np
 
@@ -18,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
 
-TIMINGS = {}  # Global dictionary of stored timings, for debugging purposes
 
 def fix_coordinates(coordinates):
     if type(coordinates) in [type(list()), type(set())]:
