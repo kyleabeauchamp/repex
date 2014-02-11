@@ -54,8 +54,11 @@ class TimeContext(object):
         return False
 
 
-class Timable(object):
+class Timer(object):
     """A Mixin class with timing functions."""
+    
+    def __init__(self):
+        self.reset_timing_statistics()
 
 
     def reset_timing_statistics(self):
@@ -114,7 +117,7 @@ class Timable(object):
         for timing_keyword in self.elapsed_time:
             logger.debug("%24s %8.3f s" % (timing_keyword, self.elapsed_time[timing_keyword]))
 
-        print("Saved timestamp differences:")
+        logger.debug("Saved timestamp differences:")
         
         for i, keyword in enumerate(self.timestamps):
             

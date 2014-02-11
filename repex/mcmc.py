@@ -86,7 +86,7 @@ import simtk.unit as u
 
 from repex import integrators
 from repex import thermodynamics
-from repex.timing import Timable
+from repex.timing import Timer
 
 from abc import abstractmethod 
 
@@ -407,7 +407,7 @@ class SamplerState(object):
 # Monte Carlo Move abstract base class
 #=============================================================================================
 
-class MCMCMove(Timable):
+class MCMCMove(object):
     """
     Markov chain Monte Carlo (MCMC) move abstract base class.
 
@@ -709,7 +709,8 @@ class LangevinDynamicsMove(MCMCMove):
 
         """
 
-        self.timestamp("start")
+        timer = Timer()
+        timer.timestamp("start")
         
         # Check if the system contains a barostat.
         system = sampler_state.system
@@ -728,9 +729,9 @@ class LangevinDynamicsMove(MCMCMove):
         integrator.setRandomNumberSeed(seed)
 
         # Create context.
-        self.timestamp("before context")
+        timer.timestamp("before context")
         context = sampler_state.createContext(integrator, platform=platform)
-        self.timestamp("after context")
+        timer.timestamp("after context")
         logger.debug("LangevinDynamicMove: Context created, platform is %s" % context.getPlatform().getName())
 
         # Set pressure, if barostat is included.
@@ -742,19 +743,19 @@ class LangevinDynamicsMove(MCMCMove):
             context.setVelocitiesToTemperature(thermodynamic_state.temperature)
         
         # Run dynamics.
-        self.timestamp("before step")
+        timer.timestamp("before step")
         integrator.step(self.nsteps)
-        self.timestamp("after step")
+        timer.timestamp("after step")
 
         # Get updated sampler state.
-        self.timestamp("before update sampler state")
+        timer.timestamp("before update sampler state")
         updated_sampler_state = SamplerState.createFromContext(context)
-        self.timestamp("after update sampler state")
+        timer.timestamp("after update sampler state")
 
         # Clean up.
         del context
 
-        self.report_timing()
+        timer.report_timing()
 
         return updated_sampler_state
     
@@ -933,8 +934,9 @@ class GHMCMove(MCMCMove):
         >>> updated_sampler_state = move.apply(thermodynamic_state, sampler_state)
 
         """
-
-        self.timestamp("start apply")
+        
+        timer = Timer()
+        timer.timestamp("start apply")
         
         # Create integrator.
         integrator = integrators.GHMCIntegrator(temperature=thermodynamic_state.temperature, collision_rate=self.collision_rate, timestep=self.timestep)
@@ -944,9 +946,9 @@ class GHMCMove(MCMCMove):
         integrator.setRandomNumberSeed(seed)
 
         # Create context.
-        self.timestamp("before context")
+        timer.timestamp("before context")
         context = sampler_state.createContext(integrator, platform=platform)
-        self.timestamp("after context")
+        timer.timestamp("after context")
 
         # TODO: Enforce constraints?
         #tol = 1.0e-8
@@ -954,14 +956,14 @@ class GHMCMove(MCMCMove):
         #context.applyVelocityConstraints(tol)
 
         # Run dynamics.
-        self.timestamp("Before step")
+        timer.timestamp("Before step")
         integrator.step(self.nsteps)
-        self.timestamp("After step")
+        timer.timestamp("After step")
         
         # Get updated sampler state.
-        self.timestamp("Before update sampler state")
+        timer.timestamp("Before update sampler state")
         updated_sampler_state = SamplerState.createFromContext(context)
-        self.timestamp("After update sampler state")
+        timer.timestamp("After update sampler state")
         
         # Accumulate acceptance statistics.
         ghmc_global_variables = { integrator.getGlobalVariableName(index) : index for index in range(integrator.getNumGlobalVariables()) }
@@ -976,7 +978,7 @@ class GHMCMove(MCMCMove):
         # Clean up.
         del context
         
-        self.report_timing()
+        timer.report_timing()
         
         return updated_sampler_state
     
@@ -1072,7 +1074,8 @@ class HMCMove(MCMCMove):
 
         """
         
-        self.timestamp("Begin apply()")
+        timer = Timer()
+        timer.timestamp("Begin apply()")
 
         # Create integrator.
         integrator = integrators.HMCIntegrator(temperature=thermodynamic_state.temperature, timestep=self.timestep, nsteps=self.nsteps)
@@ -1082,25 +1085,25 @@ class HMCMove(MCMCMove):
         integrator.setRandomNumberSeed(seed)
 
         # Create context.
-        self.timestamp("Before context creation")
+        timer.timestamp("Before context creation")
         context = sampler_state.createContext(integrator, platform=platform)
-        self.timestamp("After context creation")
+        timer.timestamp("After context creation")
 
         # Run dynamics.
         # Note that ONE step of this integrator is equal to self.nsteps of velocity Verlet dynamics followed by Metropolis accept/reject.
-        self.timestamp("Before step(1)")
+        timer.timestamp("Before step(1)")
         integrator.step(1)
-        self.timestamp("After step(1)")
+        timer.timestamp("After step(1)")
         
         # Get sampler state.
-        self.timestamp("Before update sampler state")
+        timer.timestamp("Before update sampler state")
         updated_sampler_state = SamplerState.createFromContext(context)
-        self.timestamp("After update sampler state")
+        timer.timestamp("After update sampler state")
 
         # Clean up.
         del context
 
-        self.report_timing()
+        timer.report_timing()
         
         # Return updated sampler state.
         return updated_sampler_state
@@ -1196,7 +1199,8 @@ class MonteCarloBarostatMove(MCMCMove):
 
         """
         
-        self.timestamp("Begin apply()")
+        timer = Timer()
+        timer.timestamp("Begin apply()")
 
         # Make sure system contains a barostat.
         system = sampler_state.system
@@ -1222,23 +1226,23 @@ class MonteCarloBarostatMove(MCMCMove):
         force.setRandomNumberSeed(seed)
 
         # Create context.
-        self.timestamp("Before context")
+        timer.timestamp("Before context")
         context = sampler_state.createContext(integrator, platform=platform)
-        self.timestamp("After context")
+        timer.timestamp("After context")
 
         # Set pressure.
         context.setParameter(parameter_name, thermodynamic_state.pressure)
 
         # Run update.
         # Note that ONE step of this integrator is equal to self.nsteps of velocity Verlet dynamics followed by Metropolis accept/reject.
-        self.timestamp("Before step(1)")
+        timer.timestamp("Before step(1)")
         integrator.step(self.nattempts)
-        self.timestamp("After step(1)")
+        timer.timestamp("After step(1)")
         
         # Get sampler state.
-        self.timestamp("Before update sampler state")
+        timer.timestamp("Before update sampler state")
         updated_sampler_state = SamplerState.createFromContext(context)
-        self.timestamp("After update sampler state")
+        timer.timestamp("After update sampler state")
 
         # DEBUG
         #print thermodynamics.volume(updated_sampler_state.box_vectors)
@@ -1250,7 +1254,7 @@ class MonteCarloBarostatMove(MCMCMove):
         if old_barostat_frequency:
             force.setFrequency(old_barostat_frequency)
 
-        self.report_timing()
+        timer.report_timing()
 
         # Return updated sampler state.
         return updated_sampler_state
