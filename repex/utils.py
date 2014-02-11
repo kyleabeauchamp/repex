@@ -14,9 +14,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
-
-
 def fix_coordinates(coordinates):
     if type(coordinates) in [type(list()), type(set())]:
         return [ units.Quantity(np.array(coordinate_set / coordinate_set.unit), coordinate_set.unit) for coordinate_set in coordinates ] 
