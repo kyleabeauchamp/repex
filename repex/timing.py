@@ -55,7 +55,14 @@ class TimeContext(object):
 
 
 class Timer(object):
-    """A Mixin class with timing functions."""
+    """A class with timing functions.
+    
+    Notes
+    -----
+    To use this, first initialize a Timer, then call 
+    timestamp(keyword) at various points in the code to be benchmarked.
+    Finally, print the timings with report_timings()
+    """
     
     def __init__(self):
         self.reset_timing_statistics()
