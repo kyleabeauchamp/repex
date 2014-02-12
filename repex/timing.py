@@ -55,12 +55,12 @@ class TimeContext(object):
 
 
 class Timer(object):
-    """A class with timing functions.
+    """A class with stopwatch-style timing functions.
     
     Notes
     -----
     To use this, first initialize a Timer, then call 
-    timestamp(keyword) at various points in the code to be benchmarked.
+    start(keyword) and stop(keyword) at various points in the code to be benchmarked.
     Finally, print the timings with report_timings()
     """
     
@@ -71,31 +71,16 @@ class Timer(object):
     def reset_timing_statistics(self):
         """Reset the timing statistics.
         """
-
-        self.timestamps = OrderedDict()
-        
+      
         self._t0 = {}
         self._t1 = {}
         self._elapsed = {}
 
     def check_initialized(self):
-        for key in ["timestamps", "_t0", "_t1", "_elapsed"]:
+        for key in ["_t0", "_t1", "_elapsed"]:
             if not hasattr(self, key):
                 self.reset_timing_statistics()
-            
-    
-    def timestamp(self, keyword):
-        """Record the current time and save as keyword.
-        
-        Parameters
-        ----------
-        keyword : str
-            What name to associate the current time with.
-        """
 
-
-        self.check_initialized()
-        self.timestamps[keyword] = time.time()
     
     def start(self, keyword):
         """Start a timer with given keyword."""
@@ -110,26 +95,6 @@ class Timer(object):
         else:
             logger.info("Can't stop timing for keyword")
 
-    def _report_timestamps(self):
-        
-        logger.debug("Saved timestamp differences:")
-        
-        for i, keyword in enumerate(self.timestamps):
-            try:
-                keyword2 = self.timestamps.keys()[i + 1]
-                delta = self.timestamps[keyword2] - self.timestamps[keyword]
-                logger.debug("%24s %8.3f s" % (keyword, delta))                
-            except IndexError:
-                pass
-            
-
-    def _report_stopwatch(self):
-        
-        logger.debug("Saved stopwatch times:")
-
-        for keyword, time in self._elapsed.iteritems():
-            logger.debug("%24s %8.3f s" % (keyword, time))
-
 
     def report_timing(self, clear=True):
         """
@@ -138,8 +103,10 @@ class Timer(object):
         """
         self.check_initialized()
 
-        #self._report_timestamps()
-        self._report_stopwatch()
+        logger.debug("Saved timings:")
+
+        for keyword, time in self._elapsed.iteritems():
+            logger.debug("%24s %8.3f s" % (keyword, time))
         
         if clear == True:
             self.reset_timing_statistics()
