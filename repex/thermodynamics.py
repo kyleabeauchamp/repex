@@ -179,9 +179,11 @@ class ThermodynamicState(object):
         self._integrator = None
 
     def _compute_potential(self, coordinates, box_vectors):
-        # Set coordinates and periodic box vectors.
-        self._context.setPositions(coordinates)
+        # Set periodic box vectors first, or else coordinates will wrap improperly.
         if box_vectors is not None: self._context.setPeriodicBoxVectors(*box_vectors)                
+
+        # Set coordinates.
+        self._context.setPositions(coordinates)
         
         # Retrieve potential energy.
         openmm_state = self._context.getState(getEnergy=True)
