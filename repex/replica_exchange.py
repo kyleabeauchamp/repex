@@ -440,18 +440,12 @@ class ReplicaExchange(object):
     def _compute_energies(self):
         """Compute energies of all replicas at all states.
 
-        TODO
-
-        * We have to re-order Context initialization if we have variable box volume
-        * Parallel implementation
-        
         """
 
         start_time = time.time()
         
         logger.debug("Computing energies...")
         
-        # TODO: Parallel implementation.
         # Compute energies for this node's share of states.
         for state_index in range(self.mpicomm.rank, self.n_states, self.mpicomm.size):
             for replica_index in range(self.n_states):
