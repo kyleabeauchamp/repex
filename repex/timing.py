@@ -138,7 +138,7 @@ class Timer(object):
         """
         self.check_initialized()
 
-        self._report_timestamps()
+        #self._report_timestamps()
         self._report_stopwatch()
         
         if clear == True:
