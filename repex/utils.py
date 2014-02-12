@@ -10,11 +10,9 @@ from mdtraj.utils import ensure_type
 
 from pkg_resources import resource_filename
 
-kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA # Boltzmann constant
+import logging
+logger = logging.getLogger(__name__)
 
-
-def time_and_print(x):
-    return x
 
 def fix_coordinates(coordinates):
     if type(coordinates) in [type(list()), type(set())]:
@@ -97,3 +95,4 @@ def find_matching_subclass(cls, name):
         if sub.__name__ == name:
             return sub
     raise(TypeError("Cannot find matching subclass!"))
+

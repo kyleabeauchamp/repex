@@ -85,9 +85,8 @@ class ThermodynamicState(object):
     * Implement a more fundamental ProbabilityState as a base class?
     * Implement pH.
 
-    """
-    
-    def __init__(self, system, temperature, pressure=None,):
+    """    
+    def __init__(self, system, temperature, pressure=None):
         """Construct a thermodynamic state with given system and temperature.
 
         Parameters
