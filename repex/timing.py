@@ -72,10 +72,17 @@ class Timer(object):
         """Reset the timing statistics.
         """
 
-        self.elapsed_time = OrderedDict()
         self.timestamps = OrderedDict()
-        self.timestamps["reset_timing_statistics"] = time.time()
+        
+        self._t0 = {}
+        self._t1 = {}
+        self._elapsed = {}
 
+    def check_initialized(self):
+        for key in ["timestamps", "_t0", "_t1", "_elapsed"]:
+            if not hasattr(self, key):
+                self.reset_timing_statistics()
+            
     
     def timestamp(self, keyword):
         """Record the current time and save as keyword.
@@ -86,55 +93,54 @@ class Timer(object):
             What name to associate the current time with.
         """
 
-        if not hasattr(self, "elapsed_time"):
-            self.reset_timing_statistics()
-        
+
+        self.check_initialized()
         self.timestamps[keyword] = time.time()
     
-    def record_timing(self, timing_keyword, elapsed_time):
-        """
-        Record the elapsed time for a given phase of the calculation.
-
-        Parameters
-        ----------
-        timing_keyword : str
-           The keyword for which to store the elapsed time (e.g. 'context creation', 'integration', 'state extraction')
-        elapsed_time : float
-           The elapsed time, in seconds.
-
-        """
-        if not hasattr(self, "elapsed_time"):
-            self.reset_timing_statistics()
+    def start(self, keyword):
+        """Start a timer with given keyword."""
         
-        if timing_keyword not in self.elapsed_time:
-            self.elapsed_time[timing_keyword] = 0.0
-        self.elapsed_time[timing_keyword] += elapsed_time
+        self.check_initialized()        
+        self._t0[keyword] = time.time()
+    
+    def stop(self, keyword):
+        if keyword in self._t0:
+            self._t1[keyword] = time.time()
+            self._elapsed[keyword] = self._t1[keyword] - self._t0[keyword]
+        else:
+            logger.info("Can't stop timing for keyword")
+
+    def _report_timestamps(self):
+        
+        logger.debug("Saved timestamp differences:")
+        
+        for i, keyword in enumerate(self.timestamps):
+            try:
+                keyword2 = self.timestamps.keys()[i + 1]
+                delta = self.timestamps[keyword2] - self.timestamps[keyword]
+                logger.debug("%24s %8.3f s" % (keyword, delta))                
+            except IndexError:
+                pass
+            
+
+    def _report_stopwatch(self):
+        
+        logger.debug("Saved stopwatch times:")
+
+        for keyword, time in self._elapsed.iteritems():
+            logger.debug("%24s %8.3f s" % (keyword, time))
+
 
     def report_timing(self, clear=True):
         """
         Report the timing for a move type.
         
         """
-        if not hasattr(self, "elapsed_time"):
-            self.reset_timing_statistics()
+        self.check_initialized()
 
-        self.timestamp("At report")
+        self._report_timestamps()
+        self._report_stopwatch()
         
-        logger.debug("Saved elapsed times:")
-        for timing_keyword in self.elapsed_time:
-            logger.debug("%24s %8.3f s" % (timing_keyword, self.elapsed_time[timing_keyword]))
-
-        logger.debug("Saved timestamp differences:")
-        
-        for i, keyword in enumerate(self.timestamps):
-            
-            try:
-                keyword2 = self.timestamps.keys()[i + 1]
-            except IndexError:
-                pass
-            delta = self.timestamps[keyword2] - self.timestamps[keyword]
-            logger.debug("%24s %8.3f s" % (keyword, delta))
-
         if clear == True:
             self.reset_timing_statistics()
         
