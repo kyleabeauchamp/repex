@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/choderalab/repex.png)](https://travis-ci.org/choderalab/repex)
+
 # repex
 
 Replica-exchange simulation algorithms for OpenMM.
