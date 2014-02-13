@@ -45,12 +45,7 @@ class ParallelTempering(ReplicaExchange):
                     raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different pressures!"))
 
 
-        # Now we do a little hack where we temporarily set all the barostat temperatures to zero
-        # So that the system objects can be compared for equality modulo barostat temperature.  
-        # We also need to ignore the random number seed in the barostat
-        # Afterwards we reset the temperatures to the input values
-
-        with IgnoreBarostat(thermodynamic_states):
+        with IgnoreBarostat(thermodynamic_states):  # Allows us to compare state equality modulo barostat temperature and RNG seed; see class definition below.
             
             for s0 in thermodynamic_states:
                 for s1 in thermodynamic_states:
@@ -153,6 +148,15 @@ class ParallelTempering(ReplicaExchange):
 class IgnoreBarostat(object):
     """A context manager that temporarily disables the barostat temperature
     and random seed, for testing get_state() equality.
+    
+    Notes
+    -----
+
+    Now we do a little hack where we temporarily set all the barostat temperatures
+    and random number seeds to 1 So that the system objects can be 
+    compared for equality modulo barostat temperature and RNG seed.
+    Afterwards we reset the temperatures and seeds to the original values
+    
     
     Examples
     --------
