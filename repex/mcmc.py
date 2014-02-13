@@ -335,13 +335,6 @@ class SamplerState(object):
                 platform = mm.Platform.getPlatformByName(platform_name)
                 context = mm.Context(self.system, integrator, platform)            
 
-        # Set positions.
-        context.setPositions(self.positions)
-
-        # Set velocities, if specified.
-        if (self.velocities is not None): 
-            context.setVelocities(self.velocities)
-
         # Set box vectors, if specified.
         if (self.box_vectors is not None): 
             try:
@@ -350,6 +343,13 @@ class SamplerState(object):
             except:
                 # try numpy 3x3 matrix of box vectors
                 context.setPeriodicBoxVectors(self.box_vectors[0,:], self.box_vectors[1,:], self.box_vectors[2,:])
+
+        # Set positions.
+        context.setPositions(self.positions)
+
+        # Set velocities, if specified.
+        if (self.velocities is not None): 
+            context.setVelocities(self.velocities)
 
         return context
 
