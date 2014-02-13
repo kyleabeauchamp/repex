@@ -388,8 +388,7 @@ class ReplicaExchange(object):
         sampler_states_gather = self.mpicomm.allgather([self.sampler_states[replica_index] for replica_index in replica_indices ])
         for (source, replica_indices) in enumerate(replica_indices_gather):
             for (index, replica_index) in enumerate(replica_indices):
-                self.sampler_states[replica_index].positions = sampler_states_gather[source][index].positions
-                self.sampler_states[replica_index].box_vectors = sampler_states_gather[source][index].box_vectors
+                self.sampler_states[replica_index] = sampler_states_gather[source][index]
 
         end_time = time.time()
         logger.debug("Synchronizing configurations and box vectors: elapsed time %.3f s" % (end_time - start_time))
