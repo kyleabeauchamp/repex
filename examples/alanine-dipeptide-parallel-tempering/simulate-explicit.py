@@ -80,6 +80,7 @@ if not resume:
     mpicomm = repex.dummympi.DummyMPIComm()
     parameters = {"number_of_iterations" : 10}
     parameters = {"collision_rate" : collision_rate}
+    #parameters = {"minimize" : False }
     from repex import ParallelTempering
     simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, pressure=pressure, n_temps=n_temps, mpicomm=mpicomm, platform=platform, parameters=parameters)
 

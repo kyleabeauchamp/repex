@@ -74,6 +74,56 @@ def DummyIntegrator():
     
     return integrator
 
+def GradientDescentMinimizationIntegrator(max_step_size=0.01*units.angstroms):
+    """
+    Construct a simple gradient descent minimization integrator.
+
+    Parameters
+    ----------
+    max_step_size : numpy.unit.Quantity compatible with nanometers, default: 0.01*simtk.unit.angstroms
+        The maximum step size norm.
+
+    Returns
+    -------
+    integrator : simtk.openmm.CustomIntegrator
+        A velocity Verlet integrator.
+
+    Notes
+    -----
+
+    References
+    ----------
+
+    Examples
+    --------
+    
+    Create a gradient descent minimization integrator.
+    
+    >>> timestep = 1.0 * simtk.unit.femtoseconds
+    >>> integrator = GradientDescentMinimizationIntegrator(timestep)
+
+    """
+
+    timestep = 1.0 * units.femtoseconds
+    integrator = mm.CustomIntegrator(timestep)
+
+    integrator.addGlobalVariable("max_step_size", max_step_size)
+    integrator.addGlobalVariable("fnorm2", 0)
+
+    # Update context state.
+    integrator.addUpdateContextState()
+
+    # Compute sum of squared norm
+    integrator.addComputeSum("fnorm2", "f^2")
+
+    # Move at maximum step size.
+    integrator.addComputePerDof("x", "x+max_step_size*f/sqrt(fnorm2)")
+                                
+    # Constrain positions.                               
+    integrator.addConstrainPositions()
+    
+    return integrator
+
 def VelocityVerletIntegrator(timestep=1.0*simtk.unit.femtoseconds):
     """
     Construct a velocity Verlet integrator.

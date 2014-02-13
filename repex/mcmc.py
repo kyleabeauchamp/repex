@@ -379,12 +379,30 @@ class SamplerState(object):
 
         """
 
+        # Minimize (DEBUG)
         context = self.createContext(platform=platform)
-        mm.LocalEnergyMinimizer.minimize(context) # DEBUG
+        #mm.LocalEnergyMinimizer.minimize(context)
+
+        nsteps = 50
+        print "minimizing for %d steps..." % nsteps
+        import time
+        initial_time = time.time()
+        from integrators import GradientDescentMinimizationIntegrator
+        integrator = GradientDescentMinimizationIntegrator()
+        context = self.createContext(integrator=integrator, platform=platform)
+        integrator.step(nsteps)
+        final_time = time.time()
+        elapsed_time = final_time - initial_time
+        print "completed in %.3f s" % elapsed_time
+
         sampler_state = SamplerState.createFromContext(context)
         self.positions = sampler_state.positions
         self.potential_energy = sampler_state.potential_energy
         self.total_energy = sampler_state.total_energy
+
+        del context
+        del integrator
+
         return
 
     def has_nan(self):
