@@ -191,7 +191,7 @@ class IgnorePressures(object):
         
         num_barostats = np.array([self.get_num_barostats(state) for state in thermodynamic_states])
         assert num_barostats.min() == num_barostats.max()
-        num_barostats = num_barostats[0]
+        self.num_barostats = num_barostats[0]
         
         self.thermodynamic_states = thermodynamic_states
 
@@ -199,25 +199,26 @@ class IgnorePressures(object):
     def __enter__(self):
         self.temperatures = []
         self.seeds = []
-
-        for k, state in enumerate(self.thermodynamic_states):
-            temperature, seed = self.get_barostat_state(state)
-            logger.debug("Initial: State %d temperature and random seed are %s %s" % (k, temperature, seed))
-            self.temperatures.append(temperature)
-            self.seeds.append(seed)
-            self.set_barostat_state(state, 1, 1)
-            temperature, seed = self.get_barostat_state(state)
-            logger.debug("Intermediate: State %d temperature and random seed are %s %s" % (k, temperature, seed))
+        if self.num_barostats > 0:
+            for k, state in enumerate(self.thermodynamic_states):
+                temperature, seed = self.get_barostat_state(state)
+                logger.debug("Initial: State %d temperature and random seed are %s %s" % (k, temperature, seed))
+                self.temperatures.append(temperature)
+                self.seeds.append(seed)
+                self.set_barostat_state(state, 1, 1)
+                temperature, seed = self.get_barostat_state(state)
+                logger.debug("Intermediate: State %d temperature and random seed are %s %s" % (k, temperature, seed))
             
             
         return self
 
     
     def __exit__(self, ty, val, tb):
-        for k, state in enumerate(self.thermodynamic_states):
-            temperature = self.temperatures[k]
-            seed = self.seeds[k]
-            self.set_barostat_state(state, temperature, seed)
-            logger.debug("Final: State %d temperature and random seed are %s %s" % (k, temperature, seed))
+        if self.num_barostats > 0:
+            for k, state in enumerate(self.thermodynamic_states):
+                temperature = self.temperatures[k]
+                seed = self.seeds[k]
+                self.set_barostat_state(state, temperature, seed)
+                logger.debug("Final: State %d temperature and random seed are %s %s" % (k, temperature, seed))
 
         return False
