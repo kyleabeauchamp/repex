@@ -50,7 +50,7 @@ class ParallelTempering(ReplicaExchange):
         # We also need to ignore the random number seed in the barostat
         # Afterwards we reset the temperatures to the input values
 
-        with IgnorePressures(thermodynamic_states):
+        with IgnoreBarostat(thermodynamic_states):
             
             for s0 in thermodynamic_states:
                 for s1 in thermodynamic_states:
@@ -150,8 +150,8 @@ class ParallelTempering(ReplicaExchange):
         return repex
 
 
-class IgnorePressures(object):
-    """A context manager that temporarily disables the pressure control 
+class IgnoreBarostat(object):
+    """A context manager that temporarily disables the barostat temperature
     and random seed, for testing get_state() equality.
     
     Examples
