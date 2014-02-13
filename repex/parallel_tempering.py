@@ -151,11 +151,19 @@ class ParallelTempering(ReplicaExchange):
 
 
 class IgnorePressures(object):
-    """A context manager that temporarily disables the pressure control, for testing get_state() equality.
+    """A context manager that temporarily disables the pressure control 
+    and random seed, for testing get_state() equality.
+    
+    Examples
+    --------
+    
+    with IgnorePressure(thermodynamic_states):
+        pass
     """
 
 
     def get_num_barostats(self, state):
+        """Get the number of barostats, raising an error if there are multiple."""
         forces = state.system.getForces()
         num_barostats = 0
         for f in forces:
@@ -171,6 +179,11 @@ class IgnorePressures(object):
 
 
     def get_barostat_state(self, state):
+        """Return temperature and seed from the barostat."""
+        
+        if self.num_barostats <= 0:
+            raise(ValueError("Found no barostats!"))
+        
         forces = state.system.getForces()
         for f in forces:
             if f.__class__.__name__ == "MonteCarloBarostat":
@@ -180,6 +193,11 @@ class IgnorePressures(object):
         return temperature, seed
 
     def set_barostat_state(self, state, temperature, seed):
+        """Set the temperature and seed from the barostat."""
+        
+        if self.num_barostats <= 0:
+            raise(ValueError("Found no barostats!"))
+                
         forces = state.system.getForces()
         for f in forces:
             if f.__class__.__name__ == "MonteCarloBarostat":
