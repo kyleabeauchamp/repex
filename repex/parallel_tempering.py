@@ -45,28 +45,12 @@ class ParallelTempering(ReplicaExchange):
                     raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different pressures!"))
 
 
-        # Now we do a little hack where we temporarily set all the barostat temperatures to zero
-        # So that the system objects can be compared for equality modulo barostat temperature.  
-        # Afterwards we reset the temperatures to the input values
-
-        temperatures = [s0.temperature for s0 in thermodynamic_states]  # Keep track of initial temperatures
-
-        def set_barostat_temperature(state, temperature):
-            forces = state.system.getForces()
-            for f in forces:
-                if f.__class__.__name__ == "MonteCarloBarostat":
-                    f.setTemperature(temperature)
-
-        for s0 in thermodynamic_states:
-            set_barostat_temperature(s0, 0.0)
-
-        for s0 in thermodynamic_states:
-            for s1 in thermodynamic_states:
-                if s0.system.__getstate__() != s1.system.__getstate__():
-                    raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different systems!"))
-
-        for k, s0 in enumerate(thermodynamic_states):
-            set_barostat_temperature(s0, temperatures[k])
+        with IgnoreBarostat(thermodynamic_states):  # Allows us to compare state equality modulo barostat temperature and RNG seed; see class definition below.
+            
+            for s0 in thermodynamic_states:
+                for s1 in thermodynamic_states:
+                    if s0.system.__getstate__() != s1.system.__getstate__():
+                        raise(ValueError("For ParallelTempering, ThermodynamicState objects cannot have different systems!"))
 
 
     def _compute_energies(self):
@@ -159,3 +143,104 @@ class ParallelTempering(ReplicaExchange):
 
         repex._run_iteration_zero()
         return repex
+
+
+class IgnoreBarostat(object):
+    """A context manager that temporarily disables the barostat temperature
+    and random seed, for testing get_state() equality.
+    
+    Notes
+    -----
+
+    Now we do a little hack where we temporarily set all the barostat temperatures
+    and random number seeds to 1 So that the system objects can be 
+    compared for equality modulo barostat temperature and RNG seed.
+    Afterwards we reset the temperatures and seeds to the original values
+    
+    
+    Examples
+    --------
+    
+    with IgnorePressure(thermodynamic_states):
+        pass
+    """
+
+
+    def get_num_barostats(self, state):
+        """Get the number of barostats, raising an error if there are multiple."""
+        forces = state.system.getForces()
+        num_barostats = 0
+        for f in forces:
+            if f.__class__.__name__ == "MonteCarloBarostat":
+                temperature = f.getTemperature()            
+                seed = f.getRandomNumberSeed()
+                num_barostats += 1
+
+        if num_barostats > 1:
+            raise(ValueError("Found multiple barostats!"))
+        
+        return num_barostats
+
+
+    def get_barostat_state(self, state):
+        """Return temperature and seed from the barostat."""
+        
+        if self.num_barostats <= 0:
+            raise(ValueError("Found no barostats!"))
+        
+        forces = state.system.getForces()
+        for f in forces:
+            if f.__class__.__name__ == "MonteCarloBarostat":
+                temperature = f.getTemperature()            
+                seed = f.getRandomNumberSeed()
+        
+        return temperature, seed
+
+    def set_barostat_state(self, state, temperature, seed):
+        """Set the temperature and seed from the barostat."""
+        
+        if self.num_barostats <= 0:
+            raise(ValueError("Found no barostats!"))
+                
+        forces = state.system.getForces()
+        for f in forces:
+            if f.__class__.__name__ == "MonteCarloBarostat":
+                f.setTemperature(temperature)
+                f.setRandomNumberSeed(seed)
+    
+    
+    def __init__(self, thermodynamic_states):
+        
+        num_barostats = np.array([self.get_num_barostats(state) for state in thermodynamic_states])
+        assert num_barostats.min() == num_barostats.max()
+        self.num_barostats = num_barostats[0]
+        
+        self.thermodynamic_states = thermodynamic_states
+
+    
+    def __enter__(self):
+        self.temperatures = []
+        self.seeds = []
+        if self.num_barostats > 0:
+            for k, state in enumerate(self.thermodynamic_states):
+                temperature, seed = self.get_barostat_state(state)
+                logger.debug("Initial: State %d temperature and random seed are %s %s" % (k, temperature, seed))
+                self.temperatures.append(temperature)
+                self.seeds.append(seed)
+                self.set_barostat_state(state, 1, 1)
+                temperature, seed = self.get_barostat_state(state)
+                logger.debug("Intermediate: State %d temperature and random seed are %s %s" % (k, temperature, seed))
+            
+            
+        return self
+
+    
+    def __exit__(self, ty, val, tb):
+        if self.num_barostats > 0:
+            for k, state in enumerate(self.thermodynamic_states):
+                temperature = self.temperatures[k]
+                seed = self.seeds[k]
+                self.set_barostat_state(state, temperature, seed)
+                logger.debug("Final: State %d temperature and random seed are %s %s" % (k, temperature, seed))
+
+        return False
