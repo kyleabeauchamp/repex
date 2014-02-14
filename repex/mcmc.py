@@ -308,33 +308,12 @@ class SamplerState(object):
         if integrator is None:
             integrator = mm.VerletIntegrator(1.0 * u.femtoseconds)
 
-        # TODO: Make this less hacky, and introduce a fallback chain based on platform speeds.
-        # TODO: Do something useful with debug output.
-        try:
-            if platform:
-                context = mm.Context(self.system, integrator, platform)
-            else:
-                context = mm.Context(self.system, integrator)
-            # Make sure we won't fail during an integration step.
-            integrator.step(0)
-        except Exception as e:
-            #print "Exception occurred in creating Context: '%s'" % str(e)
-
-            try:
-                platform_name = 'CPU'
-                #print "Attempting to use fallback platform '%s'..." % platform_name
-                platform = mm.Platform.getPlatformByName(platform_name)
-                context = mm.Context(self.system, integrator, platform)            
-                # Make sure we won't fail during an integration step.
-                integrator.step(0)
-            except Exception as e:
-                #print "Exception occurred in creating Context: '%s'" % str(e)
-
-                platform_name = 'Reference'
-                #print "Attempting to use fallback platform '%s'..." % platform_name
-                platform = mm.Platform.getPlatformByName(platform_name)
-                context = mm.Context(self.system, integrator, platform)            
-
+        # Create a Context.
+        if platform:
+            context = mm.Context(self.system, integrator, platform)
+        else:
+            context = mm.Context(self.system, integrator)
+        
         # Set box vectors, if specified.
         if (self.box_vectors is not None): 
             try:
@@ -379,7 +358,7 @@ class SamplerState(object):
 
         """
 
-        nsteps = 50
+        nsteps = 100
         if maxIterations:
             nsteps = maxIterations
 
@@ -388,9 +367,15 @@ class SamplerState(object):
 
         # Use CustomIntegrator
         context = self.createContext(integrator=integrator, platform=platform)
+
+        sampler_state = SamplerState.createFromContext(context)
+        print "before: %12.1f" % (sampler_state.potential_energy / simtk.unit.kilocalories_per_mole)
+
         integrator.step(nsteps)
 
         sampler_state = SamplerState.createFromContext(context)
+        print "after : %12.1f" % (sampler_state.potential_energy / simtk.unit.kilocalories_per_mole)
+
         self.positions = sampler_state.positions
         self.potential_energy = sampler_state.potential_energy
         self.total_energy = sampler_state.total_energy
