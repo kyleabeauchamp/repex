@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/choderalab/repex.png)](https://travis-ci.org/choderalab/repex)
+[![Build Status](https://travis-ci.org/jchodera/repex.png)](https://travis-ci.org/jchodera/repex)
 
 # repex
 
