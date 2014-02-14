@@ -19,6 +19,12 @@ def test_minimizer_all_testsystems():
 
         from repex import mcmc
         sampler_state = mcmc.SamplerState(testsystem.system, testsystem.positions)
+
+        # Check if NaN.
+        if np.isnan(sampler_state.potential_energy / u.kilocalories_per_mole):
+            raise Exception("Initial energy of system %s yielded NaN" % class_name)        
+
+        # Minimize
         sampler_state.minimize()
         
         # Check if NaN.
