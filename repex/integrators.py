@@ -132,18 +132,18 @@ def GradientDescentMinimizationIntegrator(initial_step_size=0.01*units.angstroms
     integrator.addComputeGlobal("energy_old", "energy")
     integrator.addComputePerDof("x_old", "x")
 
-    # Compute sum of squared norm
+    # Compute sum of squared norm.
     integrator.addComputeSum("fnorm2", "f^2")
 
     # Take step.
-    integrator.addComputePerDof("x", "x+step_size*f/sqrt(fnorm2)")
+    integrator.addComputePerDof("x", "x+step_size*f/sqrt(fnorm2 + delta(fnorm2))")
     integrator.addConstrainPositions()
 
     # Ensure we only keep steps that go downhill in energy.
     integrator.addComputeGlobal("energy_new", "energy")
     integrator.addComputeGlobal("delta_energy", "energy_new-energy_old")
     # Accept also checks for NaN
-    integrator.addComputeGlobal("accept", "step(-delta_energy) * delta(1.0*energy_new - energy_new)")
+    integrator.addComputeGlobal("accept", "step(-delta_energy) * delta(energy - energy_new)")
     
     integrator.addComputePerDof("x", "accept*x + (1-accept)*x_old")
 

@@ -367,11 +367,17 @@ class SamplerState(object):
 
         # Use CustomIntegrator
         context = self.createContext(integrator=integrator, platform=platform)
+
+        sampler_state = SamplerState.createFromContext(context)
+        self.potential_energy = sampler_state.potential_energy
+        print "initial: %s" % self.potential_energy
+
         integrator.step(nsteps)
 
         sampler_state = SamplerState.createFromContext(context)
         self.positions = sampler_state.positions
         self.potential_energy = sampler_state.potential_energy
+        print "final: %s" % self.potential_energy
         self.total_energy = sampler_state.total_energy
 
         del context
