@@ -8,6 +8,22 @@ import tempfile
 from mdtraj.testing import eq, skipif
 import logging
 
+def test_minimizer_all_testsystems():
+    testsystem_classes = testsystems.TestSystem.__subclasses__()
+    
+    for testsystem_class in testsystem_classes:
+        class_name = testsystem_class.__name__
+        logging.info("Testing minimization with testsystem %s" % class_name)
+        
+        testsystem = testsystem_class()
+
+        from repex import mcmc
+        sampler_state = mcmc.SamplerState(testsystem.system, testsystem.positions)
+        sampler_state.minimize()
+        
+        # Check if NaN.
+        if np.isnan(sampler_state.potential_energy / u.kilocalories_per_mole):
+            raise Exception("Minimization of system %s yielded NaN" % class_name)        
 
 def test_properties_all_testsystems():
     testsystem_classes = testsystems.TestSystem.__subclasses__()
