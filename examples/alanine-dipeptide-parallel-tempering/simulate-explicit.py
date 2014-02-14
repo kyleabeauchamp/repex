@@ -19,10 +19,6 @@ logging.basicConfig(level=logging.DEBUG)
 
 output_filename = "repex.nc" # name of NetCDF file to store simulation output
 
-# Select simulation platform.
-from simtk import openmm
-platform = openmm.Platform.getPlatformByName("CUDA")
-
 # If simulation file already exists, try to resume.
 import os.path
 resume = False
@@ -33,7 +29,7 @@ if resume:
     try:
         print "Attempting to resume existing simulation..."
         import repex
-        simulation = repex.resume(output_filename, platform=platform)
+        simulation = repex.resume(output_filename)
         
         # Extend the simulation by a few iterations.
         niterations_to_extend = 10
@@ -82,7 +78,7 @@ if not resume:
     parameters = {"collision_rate" : collision_rate}
     #parameters = {"minimize" : False }
     from repex import ParallelTempering
-    simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, pressure=pressure, n_temps=n_temps, mpicomm=mpicomm, platform=platform, parameters=parameters)
+    simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, pressure=pressure, n_temps=n_temps, mpicomm=mpicomm, parameters=parameters)
 
     # Run the parallel tempering simulation.
     simulation.run()
