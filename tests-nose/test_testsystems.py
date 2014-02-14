@@ -8,6 +8,11 @@ import tempfile
 from mdtraj.testing import eq, skipif
 import logging
 
+def test_doctest():
+    import doctest
+    from repex import testsystems
+    doctest.testmod(testsystems)
+
 def test_minimizer_all_testsystems():
     testsystem_classes = testsystems.TestSystem.__subclasses__()
     
