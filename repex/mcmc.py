@@ -367,15 +367,9 @@ class SamplerState(object):
 
         # Use CustomIntegrator
         context = self.createContext(integrator=integrator, platform=platform)
-
-        sampler_state = SamplerState.createFromContext(context)
-        print "before: %12.1f" % (sampler_state.potential_energy / simtk.unit.kilocalories_per_mole)
-
         integrator.step(nsteps)
 
         sampler_state = SamplerState.createFromContext(context)
-        print "after : %12.1f" % (sampler_state.potential_energy / simtk.unit.kilocalories_per_mole)
-
         self.positions = sampler_state.positions
         self.potential_energy = sampler_state.potential_energy
         self.total_energy = sampler_state.total_energy
