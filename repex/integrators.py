@@ -90,13 +90,7 @@ def GradientDescentMinimizationIntegrator(initial_step_size=0.01*units.angstroms
 
     Notes
     -----
-
     An adaptive step size is used.
-
-    TODO
-    ----
-
-    Harden this against NaNs.
 
     References
     ----------
@@ -106,8 +100,7 @@ def GradientDescentMinimizationIntegrator(initial_step_size=0.01*units.angstroms
     
     Create a gradient descent minimization integrator.
     
-    >>> timestep = 1.0 * simtk.unit.femtoseconds
-    >>> integrator = GradientDescentMinimizationIntegrator(timestep)
+    >>> integrator = GradientDescentMinimizationIntegrator()
 
     """
 
