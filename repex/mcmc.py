@@ -357,18 +357,25 @@ class SamplerState(object):
         >>> sampler_state.minimize()
 
         """
+        timer = Timer()
 
-        nsteps = 100
-        if maxIterations:
-            nsteps = maxIterations
+        if not tolerance:
+            tolerance = 1.0 * u.kilocalories_per_mole / u.angstroms
 
-        from integrators import GradientDescentMinimizationIntegrator
-        integrator = GradientDescentMinimizationIntegrator()
+        if not maxIterations:
+            maxIterations = 100
 
-        # Use CustomIntegrator
-        context = self.createContext(integrator=integrator, platform=platform)
-        integrator.step(nsteps)
+        # Use LocalEnergyMinimizer
+        timer.start("Context creation")
+        from simtk.openmm import LocalEnergyMinimizer
+        context = self.createContext(platform=platform)
+        logger.debug("LocalEnergyMinimizer: platform is %s" % context.getPlatform().getName())
+        timer.stop("Context creation")
+        timer.start("LocalEnergyMinimizer minimize")
+        LocalEnergyMinimizer.minimize(context, tolerance, maxIterations)
+        timer.stop("LocalEnergyMinimizer minimize")
 
+        # Retrieve data.
         sampler_state = SamplerState.createFromContext(context)
         self.positions = sampler_state.positions
         self.potential_energy = sampler_state.potential_energy

@@ -416,7 +416,7 @@ class ReplicaExchange(object):
     def _minimize_all_replicas(self):
         """Minimize all replicas."""
         for replica_index in range(self.n_states):
-            self.sampler_states[replica_index].minimize(platform=self.platform)
+            self.sampler_states[replica_index].minimize(platform=self.platform, tolerance=self.parameters.minimize_tolerance, maxIterations=self.parameters.minimize_maxIterations)
             
     def _minimize_and_equilibrate(self):
         """Minimize and equilibrate all replicas."""
