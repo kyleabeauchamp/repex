@@ -382,7 +382,6 @@ class SamplerState(object):
         self.total_energy = sampler_state.total_energy
 
         del context
-        del integrator
 
         return
 
