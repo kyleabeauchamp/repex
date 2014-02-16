@@ -366,8 +366,8 @@ class SamplerState(object):
             maxIterations = 100
 
         # Use LocalEnergyMinimizer
-        timer.start("Context creation")
         from simtk.openmm import LocalEnergyMinimizer
+        timer.start("Context creation")
         context = self.createContext(platform=platform)
         logger.debug("LocalEnergyMinimizer: platform is %s" % context.getPlatform().getName())
         timer.stop("Context creation")
@@ -382,6 +382,8 @@ class SamplerState(object):
         self.total_energy = sampler_state.total_energy
 
         del context
+
+        timer.report_timing()
 
         return
 
@@ -1086,9 +1088,9 @@ class HMCMove(MCMCMove):
 
         # Run dynamics.
         # Note that ONE step of this integrator is equal to self.nsteps of velocity Verlet dynamics followed by Metropolis accept/reject.
-        timer.start("step(1)")
+        timer.start("HMC integration")
         integrator.step(1)
-        timer.stop("step(1)")
+        timer.stop("HMC integration")
         
         # Get sampler state.
         timer.start("updated_sampler_state")
