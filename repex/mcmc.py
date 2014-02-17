@@ -338,9 +338,11 @@ class SamplerState(object):
 
         Parameters
         ----------
-        tolerance : 
+        tolerance : simtk.unit.Quantity compatible with kilocalories_per_mole/anstroms, optional, default = 1*kilocalories_per_mole/anstrom
+           Tolerance to use for minimization termination criterion.
 
-        maxIterations : 
+        maxIterations : int, optional, default = 100
+           Maximum number of iterations to use for minimization.
 
         platform : simtk.openmm.Platform, optional
            Platform to use for minimization.
@@ -359,10 +361,10 @@ class SamplerState(object):
         """
         timer = Timer()
 
-        if not tolerance:
+        if (tolerance is None):
             tolerance = 1.0 * u.kilocalories_per_mole / u.angstroms
 
-        if not maxIterations:
+        if (maxIterations is None):
             maxIterations = 100
 
         # Use LocalEnergyMinimizer
