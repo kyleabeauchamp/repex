@@ -372,6 +372,7 @@ class SamplerState(object):
         timer.start("Context creation")
         context = self.createContext(platform=platform)
         logger.debug("LocalEnergyMinimizer: platform is %s" % context.getPlatform().getName())
+        logger.debug("Minimizing with tolerance %s and %d max. iterations." % (tolerance, maxIterations))
         timer.stop("Context creation")
         timer.start("LocalEnergyMinimizer minimize")
         LocalEnergyMinimizer.minimize(context, tolerance, maxIterations)
