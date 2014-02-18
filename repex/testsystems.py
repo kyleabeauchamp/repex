@@ -2010,7 +2010,8 @@ class AMOEBAIonBox(TestSystem):
         pdbfile = app.PDBFile(pdb_filename)
 
         ff =  app.ForceField("amoeba2009.xml")
-        system = ff.createSystem(pdbfile.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+        # TODO: 7A is a hack
+        system = ff.createSystem(pdbfile.topology, nonbondedMethod=app.PME, constraints=app.HBonds, useDispersionCorrection=True, nonbondedCutoff=7.0*units.angstroms)
 
         positions = pdbfile.getPositions()
         
@@ -2028,7 +2029,7 @@ class AMOEBAProteinBox(TestSystem):
         pdbfile = app.PDBFile(pdb_filename)
 
         ff =  app.ForceField("amoeba2009.xml")
-        system = ff.createSystem(pdbfile.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+        system = ff.createSystem(pdbfile.topology, nonbondedMethod=app.PME, constraints=app.HBonds, useDispersionCorrection=True)
 
         positions = pdbfile.getPositions()
         

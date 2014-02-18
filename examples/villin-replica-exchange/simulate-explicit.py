@@ -60,7 +60,7 @@ if not resume:
     forcefield = app.ForceField("amber10.xml", "tip3p.xml")
 
     # Load PDB file.
-    pdb_filename = 'alanine-dipeptide.pdb'
+    pdb_filename = '1VII.pdb'
     pdb = app.PDBFile(pdb_filename)
 
     # Create a model containing all atoms from PDB file.
@@ -69,6 +69,7 @@ if not resume:
 
     # Create OpenMM system and retrieve atomic positions.
     system = forcefield.createSystem(model.topology, nonbondedMethod=app.CutoffPeriodic, constraints=app.HBonds)
+    print "System has %d atoms." % system.getNumParticles()
     replica_positions = [model.positions for i in range(n_temps)] # number of replica positions as input must match number of replicas
 
     # Create parallel tempering simulation object.

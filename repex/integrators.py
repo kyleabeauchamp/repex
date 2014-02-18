@@ -74,6 +74,77 @@ def DummyIntegrator():
     
     return integrator
 
+def GradientDescentMinimizationIntegrator(initial_step_size=0.01*units.angstroms):
+    """
+    Construct a simple gradient descent minimization integrator.
+
+    Parameters
+    ----------
+    initial_step_size : numpy.unit.Quantity compatible with nanometers, default: 0.01*simtk.unit.angstroms
+        The norm of the initial step size guess.
+
+    Returns
+    -------
+    integrator : simtk.openmm.CustomIntegrator
+        A velocity Verlet integrator.
+
+    Notes
+    -----
+    An adaptive step size is used.
+
+    References
+    ----------
+
+    Examples
+    --------
+    
+    Create a gradient descent minimization integrator.
+    
+    >>> integrator = GradientDescentMinimizationIntegrator()
+
+    """
+
+    timestep = 1.0 * units.femtoseconds
+    integrator = mm.CustomIntegrator(timestep)
+
+    integrator.addGlobalVariable("step_size", initial_step_size/units.nanometers)
+    integrator.addGlobalVariable("energy_old", 0)
+    integrator.addGlobalVariable("energy_new", 0)
+    integrator.addGlobalVariable("delta_energy", 0)
+    integrator.addGlobalVariable("accept", 0)
+    integrator.addGlobalVariable("fnorm2", 0)
+    integrator.addPerDofVariable("x_old", 0)
+
+    # Update context state.
+    integrator.addUpdateContextState()
+
+    # Constrain positions.
+    integrator.addConstrainPositions()
+
+    # Store old energy and positions.
+    integrator.addComputeGlobal("energy_old", "energy")
+    integrator.addComputePerDof("x_old", "x")
+
+    # Compute sum of squared norm.
+    integrator.addComputeSum("fnorm2", "f^2")
+
+    # Take step.
+    integrator.addComputePerDof("x", "x+step_size*f/sqrt(fnorm2 + delta(fnorm2))")
+    integrator.addConstrainPositions()
+
+    # Ensure we only keep steps that go downhill in energy.
+    integrator.addComputeGlobal("energy_new", "energy")
+    integrator.addComputeGlobal("delta_energy", "energy_new-energy_old")
+    # Accept also checks for NaN
+    integrator.addComputeGlobal("accept", "step(-delta_energy) * delta(energy - energy_new)")
+    
+    integrator.addComputePerDof("x", "accept*x + (1-accept)*x_old")
+
+    # Update step size.
+    integrator.addComputeGlobal("step_size", "step_size * (2.0*accept + 0.5*(1-accept))")
+    
+    return integrator
+
 def VelocityVerletIntegrator(timestep=1.0*simtk.unit.femtoseconds):
     """
     Construct a velocity Verlet integrator.

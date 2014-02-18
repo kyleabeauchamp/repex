@@ -49,7 +49,6 @@ if not resume:
     # Temperatures will be exponentially (geometrically) spaced by default
     T_min = 273.0 * unit.kelvin # minimum temperature for parallel tempering ladder
     T_max = 600.0 * unit.kelvin # maximum temperature for parallel tempering ladder
-    pressure = 1.0 * unit.atmospheres # external pressure
     n_temps = 10 # number of temperatures
 
     collision_rate = 20.0 / unit.picosecond # collision rate for Langevin dynamics
@@ -57,18 +56,18 @@ if not resume:
     
     # Load forcefield.
     from simtk.openmm import app
-    forcefield = app.ForceField("amber10.xml", "tip3p.xml")
+    forcefield = app.ForceField("amber10.xml", "amber10_obc.xml")
 
     # Load PDB file.
-    pdb_filename = 'alanine-dipeptide.pdb'
+    pdb_filename = '1VII.pdb'
     pdb = app.PDBFile(pdb_filename)
 
     # Create a model containing all atoms from PDB file.
     model = app.modeller.Modeller(pdb.topology, pdb.positions)
-    model.addSolvent(forcefield, padding=9.0*unit.angstroms) 
 
     # Create OpenMM system and retrieve atomic positions.
-    system = forcefield.createSystem(model.topology, nonbondedMethod=app.CutoffPeriodic, constraints=app.HBonds)
+    system = forcefield.createSystem(model.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+    print "System has %d atoms." % system.getNumParticles()
     replica_positions = [model.positions for i in range(n_temps)] # number of replica positions as input must match number of replicas
 
     # Create parallel tempering simulation object.
@@ -76,9 +75,8 @@ if not resume:
     mpicomm = repex.dummympi.DummyMPIComm()
     parameters = {"number_of_iterations" : 10}
     parameters = {"collision_rate" : collision_rate}
-    #parameters = {"minimize" : False }
     from repex import ParallelTempering
-    simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, pressure=pressure, n_temps=n_temps, mpicomm=mpicomm, parameters=parameters)
+    simulation = ParallelTempering.create(system, replica_positions, output_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, mpicomm=mpicomm, parameters=parameters)
 
     # Run the parallel tempering simulation.
     simulation.run()

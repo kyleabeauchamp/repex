@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 
 import simtk.openmm as openmm
 import simtk.unit as units
@@ -8,19 +8,48 @@ import repex.testsystems
 from pymbar import timeseries
 
 from repex.mcmc import HMCMove, GHMCMove, LangevinDynamicsMove, MonteCarloBarostatMove
+import logging
 
 # Test various combinations of systems and MCMC schemes
 analytical_testsystems = [
-    ( "HarmonicOscillatorArray", [ HMCMove() ] ), 
-    ( "HarmonicOscillatorArray", [ GHMCMove() ]),
+    ("HarmonicOscillatorArray", [ GHMCMove() ]),
     ("HarmonicOscillatorArray", { GHMCMove() : 0.5, HMCMove() : 0.5 }),
     ("HarmonicOscillatorArray", [ LangevinDynamicsMove() ]),
-    ("IdealGas", [ GHMCMove(), MonteCarloBarostatMove() ])
+    ("IdealGas", [ HMCMove(), MonteCarloBarostatMove() ])
     ]
 
 NSIGMA_CUTOFF = 6.0 # cutoff for significance testing
 
 debug = False # set to True only for manual debugging of this nose test
+
+def test_doctest():
+    import doctest
+    from repex import mcmc
+    doctest.testmod(mcmc)
+
+def test_minimizer_all_testsystems():
+    from repex import testsystems
+    testsystem_classes = testsystems.TestSystem.__subclasses__()
+    
+    for testsystem_class in testsystem_classes:
+        class_name = testsystem_class.__name__
+        logging.info("Testing minimization with testsystem %s" % class_name)
+        
+        testsystem = testsystem_class()
+
+        from repex import mcmc
+        sampler_state = mcmc.SamplerState(testsystem.system, testsystem.positions)
+
+        # Check if NaN.
+        if np.isnan(sampler_state.potential_energy / units.kilocalories_per_mole):
+            raise Exception("Initial energy of system %s yielded NaN" % class_name)        
+
+        # Minimize
+        #sampler_state.minimize(maxIterations=0)
+        
+        # Check if NaN.
+        if np.isnan(sampler_state.potential_energy / units.kilocalories_per_mole):
+            raise Exception("Minimization of system %s yielded NaN" % class_name)        
 
 def test_mcmc_expectations():
     # Select system:
@@ -38,11 +67,15 @@ def subtest_mcmc_expectation(testsystem, move_set):
     temperature = 298.0 * units.kelvin
     pressure = 1.0 * units.atmospheres
     nequil = 10 # number of equilibration iterations
-    niterations = 100 # number of production iterations
+    niterations = 20 # number of production iterations
 
     # Retrieve system and positions.
     [system, positions] = [testsystem.system, testsystem.positions]
     
+    platform_name = 'Reference'
+    from simtk.openmm import Platform
+    platform = Platform.getPlatformByName(platform_name)
+
     # Compute properties.
     kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
     kT = kB * temperature
@@ -54,11 +87,11 @@ def subtest_mcmc_expectation(testsystem, move_set):
 
     # Create MCMC sampler.
     from repex.mcmc import MCMCSampler
-    sampler = MCMCSampler(thermodynamic_state, move_set=move_set)
+    sampler = MCMCSampler(thermodynamic_state, move_set=move_set, platform=platform)
 
     # Create sampler state.
     from repex.mcmc import SamplerState
-    sampler_state = SamplerState(system=testsystem.system, positions=testsystem.positions)
+    sampler_state = SamplerState(system=testsystem.system, positions=testsystem.positions, platform=platform)
 
     # Equilibrate
     for iteration in range(nequil):
@@ -68,11 +101,11 @@ def subtest_mcmc_expectation(testsystem, move_set):
         sampler_state = sampler.run(sampler_state, 1)
 
     # Accumulate statistics.
-    x_n = numpy.zeros([niterations], numpy.float64) # x_n[i] is the x position of atom 1 after iteration i, in angstroms
-    potential_n = numpy.zeros([niterations], numpy.float64) # potential_n[i] is the potential energy after iteration i, in kT
-    kinetic_n = numpy.zeros([niterations], numpy.float64) # kinetic_n[i] is the kinetic energy after iteration i, in kT
-    temperature_n = numpy.zeros([niterations], numpy.float64) # temperature_n[i] is the instantaneous kinetic temperature from iteration i, in K
-    volume_n = numpy.zeros([niterations], numpy.float64) # volume_n[i] is the volume from iteration i, in K
+    x_n = np.zeros([niterations], np.float64) # x_n[i] is the x position of atom 1 after iteration i, in angstroms
+    potential_n = np.zeros([niterations], np.float64) # potential_n[i] is the potential energy after iteration i, in kT
+    kinetic_n = np.zeros([niterations], np.float64) # kinetic_n[i] is the kinetic energy after iteration i, in kT
+    temperature_n = np.zeros([niterations], np.float64) # temperature_n[i] is the instantaneous kinetic temperature from iteration i, in K
+    volume_n = np.zeros([niterations], np.float64) # volume_n[i] is the volume from iteration i, in K
     for iteration in range(niterations):
         if debug: print "iteration %d / %d" % (iteration, niterations)
 
@@ -106,7 +139,7 @@ def subtest_mcmc_expectation(testsystem, move_set):
             potential_expectation = testsystem.get_potential_expectation(thermodynamic_state) / kT
             potential_mean = potential_n.mean()            
             g = timeseries.statisticalInefficiency(potential_n, fast=True)
-            dpotential_mean = potential_n.std() / numpy.sqrt(niterations / g)
+            dpotential_mean = potential_n.std() / np.sqrt(niterations / g)
             potential_error = potential_mean - potential_expectation
             nsigma = abs(potential_error) / dpotential_mean
             test_passed = True
@@ -132,7 +165,7 @@ def subtest_mcmc_expectation(testsystem, move_set):
             volume_expectation = testsystem.get_volume_expectation(thermodynamic_state) / (units.nanometers**3)
             volume_mean = volume_n.mean()            
             g = timeseries.statisticalInefficiency(volume_n, fast=True)
-            dvolume_mean = volume_n.std() / numpy.sqrt(niterations / g)
+            dvolume_mean = volume_n.std() / np.sqrt(niterations / g)
             volume_error = volume_mean - volume_expectation
             nsigma = abs(volume_error) / dvolume_mean
             test_passed = True
@@ -155,4 +188,5 @@ def subtest_mcmc_expectation(testsystem, move_set):
 #=============================================================================================
 
 if __name__ == "__main__":
-    test_mcmc_expectations()
+    #test_mcmc_expectations()
+    test_minimizer_all_testsystems()

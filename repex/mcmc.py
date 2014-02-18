@@ -308,33 +308,12 @@ class SamplerState(object):
         if integrator is None:
             integrator = mm.VerletIntegrator(1.0 * u.femtoseconds)
 
-        # TODO: Make this less hacky, and introduce a fallback chain based on platform speeds.
-        # TODO: Do something useful with debug output.
-        try:
-            if platform:
-                context = mm.Context(self.system, integrator, platform)
-            else:
-                context = mm.Context(self.system, integrator)
-            # Make sure we won't fail during an integration step.
-            integrator.step(0)
-        except Exception as e:
-            #print "Exception occurred in creating Context: '%s'" % str(e)
-
-            try:
-                platform_name = 'CPU'
-                #print "Attempting to use fallback platform '%s'..." % platform_name
-                platform = mm.Platform.getPlatformByName(platform_name)
-                context = mm.Context(self.system, integrator, platform)            
-                # Make sure we won't fail during an integration step.
-                integrator.step(0)
-            except Exception as e:
-                #print "Exception occurred in creating Context: '%s'" % str(e)
-
-                platform_name = 'Reference'
-                #print "Attempting to use fallback platform '%s'..." % platform_name
-                platform = mm.Platform.getPlatformByName(platform_name)
-                context = mm.Context(self.system, integrator, platform)            
-
+        # Create a Context.
+        if platform:
+            context = mm.Context(self.system, integrator, platform)
+        else:
+            context = mm.Context(self.system, integrator)
+        
         # Set box vectors, if specified.
         if (self.box_vectors is not None): 
             try:
@@ -359,9 +338,11 @@ class SamplerState(object):
 
         Parameters
         ----------
-        tolerance : 
+        tolerance : simtk.unit.Quantity compatible with kilocalories_per_mole/anstroms, optional, default = 1*kilocalories_per_mole/anstrom
+           Tolerance to use for minimization termination criterion.
 
-        maxIterations : 
+        maxIterations : int, optional, default = 100
+           Maximum number of iterations to use for minimization.
 
         platform : simtk.openmm.Platform, optional
            Platform to use for minimization.
@@ -378,13 +359,34 @@ class SamplerState(object):
         >>> sampler_state.minimize()
 
         """
+        timer = Timer()
 
+        if (tolerance is None):
+            tolerance = 1.0 * u.kilocalories_per_mole / u.angstroms
+
+        if (maxIterations is None):
+            maxIterations = 100
+
+        # Use LocalEnergyMinimizer
+        from simtk.openmm import LocalEnergyMinimizer
+        timer.start("Context creation")
         context = self.createContext(platform=platform)
-        mm.LocalEnergyMinimizer.minimize(context) # DEBUG
+        logger.debug("LocalEnergyMinimizer: platform is %s" % context.getPlatform().getName())
+        timer.stop("Context creation")
+        timer.start("LocalEnergyMinimizer minimize")
+        LocalEnergyMinimizer.minimize(context, tolerance, maxIterations)
+        timer.stop("LocalEnergyMinimizer minimize")
+
+        # Retrieve data.
         sampler_state = SamplerState.createFromContext(context)
         self.positions = sampler_state.positions
         self.potential_energy = sampler_state.potential_energy
         self.total_energy = sampler_state.total_energy
+
+        del context
+
+        timer.report_timing()
+
         return
 
     def has_nan(self):
@@ -1088,9 +1090,9 @@ class HMCMove(MCMCMove):
 
         # Run dynamics.
         # Note that ONE step of this integrator is equal to self.nsteps of velocity Verlet dynamics followed by Metropolis accept/reject.
-        timer.start("step(1)")
+        timer.start("HMC integration")
         integrator.step(1)
-        timer.stop("step(1)")
+        timer.stop("HMC integration")
         
         # Get sampler state.
         timer.start("updated_sampler_state")
