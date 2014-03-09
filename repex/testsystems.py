@@ -1676,7 +1676,7 @@ class WaterBox(TestSystem):
 
    """
 
-   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers, model='tip3p', switch=True, switch_width=0.5*units.angstroms, constrained=True):
+   def __init__(self, box_edge=2.5*units.nanometers, cutoff=0.9*units.nanometers, model='tip3p', switch=True, switch_width=0.5*units.angstroms, constrained=True, dispersion_correction=True):
        """
        Create a water box test system.
        
@@ -1695,6 +1695,8 @@ class WaterBox(TestSystem):
           Sets the width of the switch function for Lennard-Jones.
        constrained : bool, optional, default=True
           Sets whether bonds should be constrained or flexible.
+       dispersion_correction : bool, optional, default=True
+          Sets whether the long-range dispersion correction should be used.
        
        Examples
        --------
@@ -1723,6 +1725,10 @@ class WaterBox(TestSystem):
        Set the switch width.
 
        >>> waterbox = WaterBox(switch=True, switch_width=0.8*units.angstroms)
+
+       Turn of long-range dispersion correction.
+
+       >>> waterbox = WaterBox(dispersion_correction=False)
 
        """
 
@@ -1757,10 +1763,11 @@ class WaterBox(TestSystem):
        nonbondedMethod = app.CutoffPeriodic
        system = ff.createSystem(newtop, nonbondedMethod=nonbondedMethod, nonbondedCutoff=cutoff, constraints=None, rigidWater=constrained, removeCMMotion=False)
 
-       # Turn on switching function.
+       # Set switching function and dispersion correction.
        forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
-       forces['NonbondedForce'].setUseSwitchingFunction(True)
+       forces['NonbondedForce'].setUseSwitchingFunction(switch)
        forces['NonbondedForce'].setSwitchingDistance(cutoff - switch_width)
+       forces['NonbondedForce'].setUseDispersionCorrection(dispersion_correction)
 
        self.ndof = 3*system.getNumParticles() - 3*constrained
        self.system, self.positions = system, positions
