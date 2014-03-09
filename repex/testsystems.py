@@ -2423,11 +2423,3 @@ class AMOEBAProteinBox(TestSystem):
         
         self.system, self.positions = system, positions
 
-#
-# MAIN
-#
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
-
