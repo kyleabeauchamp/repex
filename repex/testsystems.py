@@ -1374,6 +1374,9 @@ class CustomLennardJonesFluidMixture(TestSystem):
         # Determine total number of atoms.
         natoms = nx * ny * nz
 
+        # determine number of atoms that will be treated by CustomNonbondedForce
+        ncustom = int(natoms/2)
+
         # Create an empty system object.
         system = mm.System()
 
@@ -1408,9 +1411,9 @@ class CustomLennardJonesFluidMixture(TestSystem):
             cnb.setNonbondedMethod(mm.CustomNonbondedForce.CutoffPeriodic)
             cnb.setCutoffDistance(cutoff)        
         # Only add interactions between first atom and rest.
-        atomset1 = range(0, 1)
-        atomset2 = range(1, natoms)
-        cnb.addInteractionGroup(atomset1, atomset2)
+        #atomset1 = range(0, 1)
+        #atomset2 = range(1, natoms)
+        #cnb.addInteractionGroup(atomset1, atomset2)
             
         positions = units.Quantity(np.zeros([natoms,3],np.float32), units.angstrom)
 
@@ -1423,7 +1426,7 @@ class CustomLennardJonesFluidMixture(TestSystem):
             for jj in range(ny):
                 for kk in range(nz):
                     system.addParticle(mass)
-                    if atom_index == 0:                        
+                    if (atom_index < ncustom):
                         cnb.addParticle([charge, sigma, epsilon])
                         nb.addParticle(0.0*charge, sigma, 0.0*epsilon)
                     else:
