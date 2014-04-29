@@ -76,3 +76,14 @@ class DummyMPIComm(object):
         We have not yet implemented recvobj.
         """        
         raise(Exception("Dummy MPI aborted!"))
+    
+    def Barrier(self):
+        """Simulate mpicomm.Barrier on one process.
+
+        Parameters
+        ----------
+
+        Notes
+        -----
+        This is a no-op, since synchronization is a non-issue in serial
+        """
