@@ -100,9 +100,11 @@ class DummyMPIComm(object):
         -----
         This is a no-op, since synchronization is a non-issue in serial
         """
+        pass
 
     def barrier(self):
         """Same as Barrier (above)"""
+        pass
 
 # Define a COMM_WORLD
 COMM_WORLD = DummyMPIComm()
