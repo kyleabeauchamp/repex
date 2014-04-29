@@ -68,7 +68,7 @@ class ReplicaExchange(object):
         """
         
         if mpicomm is None:
-            self.mpicomm = dummympi.DummyMPIComm()
+            self.mpicomm = dummympi.COMM_WORLD
         else:
             self.mpicomm = mpicomm
 
@@ -832,7 +832,7 @@ def resume(filename, platform=None, mpicomm=None):
         
     """
     if mpicomm is None:
-        mpicomm = dummympi.DummyMPIComm()
+        mpicomm = dummympi.COMM_WORLD
     
     if mpicomm.rank == 0:
         database = netcdf_io.NetCDFDatabase(filename)  # To do: eventually use factory for looking up database type via filename
