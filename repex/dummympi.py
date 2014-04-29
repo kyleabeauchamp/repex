@@ -1,3 +1,16 @@
+"""
+Add some framework to emulate MPI behavior on a single node so no MPI
+implementations have to be installed.  The following example will make code
+compatible with no MPI
+
+Example
+-------
+    >>> try:
+    ...     from mpi4py import MPI
+    >>> except:
+    ...     import dummympi as MPI
+    >>> 
+"""
 
 
 class DummyMPIComm(object):
@@ -90,3 +103,6 @@ class DummyMPIComm(object):
 
     def barrier(self):
         """Same as Barrier (above)"""
+
+# Define a COMM_WORLD
+COMM_WORLD = DummyMPIComm()
