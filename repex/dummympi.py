@@ -87,3 +87,6 @@ class DummyMPIComm(object):
         -----
         This is a no-op, since synchronization is a non-issue in serial
         """
+
+    def barrier(self):
+        """Same as Barrier (above)"""
