@@ -7,7 +7,7 @@ Example
 -------
     >>> try:
     ...     from mpi4py import MPI
-    >>> except:
+    ... except:
     ...     import dummympi as MPI
     >>> 
 """
@@ -108,3 +108,7 @@ class DummyMPIComm(object):
 
 # Define a COMM_WORLD
 COMM_WORLD = DummyMPIComm()
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
