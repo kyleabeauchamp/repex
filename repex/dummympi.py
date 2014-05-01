@@ -1,3 +1,16 @@
+"""
+Add some framework to emulate MPI behavior on a single node so no MPI
+implementations have to be installed.  The following example will make code
+compatible with no MPI
+
+Example
+-------
+    >>> try:
+    ...     from mpi4py import MPI
+    ... except:
+    ...     import dummympi as MPI
+    >>> 
+"""
 
 
 class DummyMPIComm(object):
@@ -76,3 +89,26 @@ class DummyMPIComm(object):
         We have not yet implemented recvobj.
         """        
         raise(Exception("Dummy MPI aborted!"))
+    
+    def Barrier(self):
+        """Simulate mpicomm.Barrier on one process.
+
+        Parameters
+        ----------
+
+        Notes
+        -----
+        This is a no-op, since synchronization is a non-issue in serial
+        """
+        pass
+
+    def barrier(self):
+        """Same as Barrier (above)"""
+        pass
+
+# Define a COMM_WORLD
+COMM_WORLD = DummyMPIComm()
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()

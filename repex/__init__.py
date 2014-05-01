@@ -44,11 +44,9 @@ def _set_logging():
     import logging
     try:
         from mpi4py import MPI # MPI wrapper
-        mpicomm = MPI.COMM_WORLD
     except:
-        import dummympi
-        mpicomm = dummympi.DummyMPIComm()    
-    if mpicomm.rank == 0:
+        import dummympi as MPI # Fake MPI wrapper
+    if MPI.COMM_WORLD.rank == 0:
         logging.basicConfig(level=logging.DEBUG)  # Change this to INFO for public release!
     else:  # By default, silence output from worker nodes
         logging.basicConfig(level=logging.ERROR)
