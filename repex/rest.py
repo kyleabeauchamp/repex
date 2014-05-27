@@ -1,3 +1,4 @@
+import itertools
 import simtk.openmm as mm
 import numpy as np
 from thermodynamics import ThermodynamicState
@@ -39,27 +40,30 @@ class REST(ReplicaExchange):
                 if s0.temperature != s1.temperature:
                     raise(ValueError("For HamiltonianExchange, ThermodynamicState objects cannot have different temperatures!"))
 
-#def create(cls, system, coordinates, filename, T_min=None, T_max=None, temperatures=None, n_temps=None, pressure=None, mpicomm=None, platform=None, parameters={}):
     @classmethod
-    def create(cls, reference_state, system, coordinates, filename, T_min, T_max, n_temps, hot_atoms, mpicomm=None, platform=None, parameters={}):
-        """Create a new Hamiltonian exchange simulation object.
+    def create(cls, reference_state, system, coordinates, filename, T_min, T_max_list, n_temps_list, hot_atom_lists, mpicomm=None, platform=None, parameters={}):
+        """Create a new Replica exchange with Solute Tempering object.
 
         Parameters
         ----------
 
-        temperature : simtk.unit.Quantity, optional, units compatible with simtk.unit.kelvin
-            The temperature of the system.
-
         reference_state : ThermodynamicState
             reference state containing all thermodynamic parameters 
             except the system, which will be replaced by 'systems'
-        systems : list([simt.openmm.System])
-            list of systems to simulate (one per replica)
+        system : simt.openmm.System
+            System to simulate
         coordinates : simtk.unit.Quantity, shape=(n_atoms, 3), unit=Length
             coordinates (or a list of coordinates objects) for initial 
             assignment of replicas (will be used in round-robin assignment)
         filename : string 
             name of NetCDF file to bind to for simulation output and checkpointing
+        T_min : simtk.unit.Quantity
+            The temperature of the reference state, e.g. the lowest temperature.
+        T_max_list : list(simtk.unit.Quantity), length=n_atom_groups
+            A list of highest temperatures for each atom group.
+        hot_atom_lists : list(numpy array like, dtype='int'), length=n_atom_groups
+            A list of arrays of atom indices, corresponding to the different atom
+            groups to be softened.
         mpicomm : mpi4py communicator, default=None
             MPI communicator, if parallel execution is desired.      
         kwargs (dict) - Optional parameters to use for specifying simulation
@@ -68,37 +72,77 @@ class REST(ReplicaExchange):
         Notes
         -----
         
-        The parameters of this function are different from  ReplicaExchange.create_repex().
+        The atom groups in hot_atom_lists should be unique and orthogonal,
+        otherwise double-softening will occur.
 
         """
         
+        temperature_lists = [[T_min + (T_max - T_min) * (np.exp(float(i) / float(n_temps-1)) - 1.0) / (np.e - 1.0) for i in range(n_temps) ] for (T_max, n_temps) in zip(T_max_list, n_temps_list)]
         
-        temperatures = [ T_min + (T_max - T_min) * (np.exp(float(i) / float(n_temps-1)) - 1.0) / (np.e - 1.0) for i in range(n_temps) ]
+        temperature_tuples = list(itertools.product(*temperature_lists))  # List of tuples of atom subset temperatures
         
-        reference_temperature = temperatures[0]  # All systems will be simulated at reference temperature but with softened hamiltonians.
+        reference_temperature = T_min  # All systems will be simulated at reference temperature but with softened hamiltonians.
         
-        thermodynamic_states = [ ThermodynamicState(system=system, temperature=reference_temperature, pressure=reference_state.pressure) for temperature in temperatures]
+        # All thermodynamic states have same temperature and pressure, but will have modified system objects.
+        thermodynamic_states = [ ThermodynamicState(system=system, temperature=reference_temperature, pressure=reference_state.pressure) for temperature_tuple in temperature_tuples]
         
         for k, state in enumerate(thermodynamic_states):
-            cls.perturb_system(state.system, temperature=temperatures[k], reference_temperature=reference_temperature, hot_atoms=hot_atoms)
+            cls.soften_system(state.system, temperature_tuple=temperature_tuples[k], reference_temperature=reference_temperature, hot_atom_lists=hot_atom_lists)
         
         sampler_states = [SamplerState(thermodynamic_states[k].system, coordinates, platform=platform) for k in range(len(thermodynamic_states))]
         return super(cls, REST).create(thermodynamic_states, [coordinates for i in range(n_temps)], filename, sampler_states=sampler_states, mpicomm=mpicomm, platform=platform, parameters=parameters)
+
+    @staticmethod
+    def soften_system(system, temperature_tuple, reference_temperature, hot_atom_lists):
+        """Soften multiple groups of atoms using different temperatures.
+
+        Parameters
+        ----------
+
+        system : simt.openmm.System
+            System to soften
+        temperature_tuple : tuple(simtk.unit.Quanity) [Kelvin]
+            Desired softening temperatures for each atom group
+        reference_temperature : simtk.unit.Quanity [Kelvin]
+            Reference (or lowest) temperature.
+        hot_atom_lists : list(numpy array like, dtype='int'), length=n_atom_groups
+            A list of arrays of atom indices, corresponding to the different atom
+            groups to be softened by the different temperatures in temperature_tuple
+        """
+        for temperature, hot_atoms in zip(temperature_tuple, hot_atom_lists):
+            REST.soften_system_single_temperature(system, temperature, reference_temperature, hot_atoms)
     
     @staticmethod
-    def perturb_system(system, temperature, reference_temperature, hot_atoms):
+    def soften_system_single_temperature(system, temperature, reference_temperature, hot_atoms, soften_torsions=True):
+        """Soften a single group of atoms using a single temperature.  Eqn. 3 in Paper.
+        
+        Parameters
+        ----------
+
+        system : simt.openmm.System
+            System to soften
+        temperature : simtk.unit.Quanity [Kelvin]
+            Desired softening temperature for atom group
+        reference_temperature : simtk.unit.Quanity [Kelvin]
+            Reference (or lowest) temperature.
+        hot_atoms : numpy.ndarray-like, dtype='int'
+            An array of atom indices to be softened to temperature
+        soften_torsions : bool, optional, default=True
+            If True, also soften the torsions.
+        
+        """
         beta = 1.0 / (kB * temperature)
         beta0 = 1.0 / (kB * reference_temperature)
         rho = beta / beta0
         
         for force in system.getForces():
             if isinstance(force, mm.NonbondedForce):
-                REST._set_nb(force, hot_atoms, rho)
-            if isinstance(force, mm.PeriodicTorsionForce):
-                REST._set_torsion(force, hot_atoms, rho)
+                REST._soften_nb(force, hot_atoms, rho)
+            if isinstance(force, mm.PeriodicTorsionForce) and soften_torsions:
+                REST._soften_torsions(force, hot_atoms, rho)
     
     @staticmethod
-    def _set_nb(force, hot_atoms, rho):
+    def _soften_nb(force, hot_atoms, rho):
         """Modify the NB forces for REST."""
         for atom in hot_atoms:
             q, sigma, epsilon = force.getParticleParameters(atom)
@@ -107,7 +151,7 @@ class REST(ReplicaExchange):
             force.setParticleParameters(atom, q, sigma, epsilon)
     
     @staticmethod
-    def _set_torsion(force, hot_atoms, rho):
+    def _soften_torsions(force, hot_atoms, rho):
         """Modify the torsion forces for REST."""
         for k in range(force.getNumTorsions()):
             i0, i1, i2, i3, period, phase, force_constant = force.getTorsionParameters(k)
