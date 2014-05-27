@@ -121,7 +121,7 @@ class REST(ReplicaExchange):
 
         system : simt.openmm.System
             System to soften
-        temperature : simtk.unit.Quanity [Kelvin]
+        temperature : simtk.unit.Quantity [Kelvin]
             Desired softening temperature for atom group
         reference_temperature : simtk.unit.Quanity [Kelvin]
             Reference (or lowest) temperature.
