@@ -11,18 +11,14 @@ requirements:
     - scipy
     - setuptools
     - mdtraj-dev
-    - gaff2xml-dev
-    - openmm    
-    - ambermini    
+    - openmm     
 
   run:
     - python
     - pandas
     - scipy
     - mdtraj-dev
-    - gaff2xml-dev    
-    - openmm    
-    - ambermini    
+    - openmm       
 
 about:
   home: https://github.com/choderalab/repex
