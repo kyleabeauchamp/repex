@@ -11,3 +11,4 @@ conda config --add channels http://conda.binstar.org/omnia
 conda create --yes -n ${python} python=${python} --file tools/ci/requirements-conda.txt
 source activate $python
 pip install pymbar==2.0.1-beta
+pip install nose-exclude
