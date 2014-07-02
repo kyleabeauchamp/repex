@@ -1200,6 +1200,8 @@ class LennardJonesFluid(TestSystem):
         Cutoff for nonbonded interactions.  If None, defaults to 2.5 * sigma
     switch : simtk.unit.Quantity, optional, default=1.0 * units.kilojoules_per_mole/units.nanometer**2
         if specified, the switching function will be turned on at this distance (default: None)
+    switch_width : simtk.unit.Quantity with units compatible with angstroms, optional, default=0.2*units.angstroms
+        switching function is turned on at cutoff - switch_width
     dispersion_correction : bool, optional, default=True
         if True, will use analytical dispersion correction (if not using switching function)
 
@@ -1228,7 +1230,7 @@ class LennardJonesFluid(TestSystem):
         epsilon=0.238 * units.kilocalories_per_mole, # argon, 
         cutoff=None, 
         switch=False, 
-        switch_width=0.5*units.angstrom,
+        switch_width=0.2*units.angstrom,
         dispersion_correction=True):        
 
         if cutoff is None:
@@ -1296,11 +1298,11 @@ class LennardJonesFluid(TestSystem):
         self.system, self.positions = system, positions
 
 #=============================================================================================
-# Custom Lennard-Jones fluid
+# Custom Lennard-Jones fluid mixture of NonbondedForce and CustomNonbondedForce
 #=============================================================================================
 
-class CustomLennardJonesFluid(TestSystem):
-    """Create a periodic rectilinear grid of Lennard-Jones particled, but implemented via CustomBondForce rather than NonbondedForce.
+class CustomLennardJonesFluidMixture(TestSystem):
+    """Create a periodic rectilinear grid of Lennard-Jones particled, but implemented via CustomBondForce and NonbondedForce.
     Parameters for argon are used by default. Cutoff is set to 3 sigma by default.
     
     Parameters
@@ -1321,6 +1323,8 @@ class CustomLennardJonesFluid(TestSystem):
         Cutoff for nonbonded interactions.  If None, defaults to 2.5 * sigma
     switch : simtk.unit.Quantity, optional, default=1.0 * units.kilojoules_per_mole/units.nanometer**2
         if specified, the switching function will be turned on at this distance (default: None)
+    switch_width : simtk.unit.Quantity with units compatible with angstroms, optional, default=0.2*units.angstroms
+        switching function is turned on at cutoff - switch_width
     dispersion_correction : bool, optional, default=True
         if True, will use analytical dispersion correction (if not using switching function)
 
@@ -1334,17 +1338,17 @@ class CustomLennardJonesFluid(TestSystem):
 
     Create default-size Lennard-Jones fluid.
 
-    >>> fluid = CustomLennardJonesFluid()
+    >>> fluid = CustomLennardJonesFluidMixture()
     >>> system, positions = fluid.system, fluid.positions
 
     Create a larger 10x8x5 box of Lennard-Jones particles.
 
-    >>> fluid = CustomLennardJonesFluid(nx=10, ny=8, nz=5)
+    >>> fluid = CustomLennardJonesFluidMixture(nx=10, ny=8, nz=5)
     >>> system, positions = fluid.system, fluid.positions
 
     Create Lennard-Jones fluid using switched particle interactions (switched off betwee 7 and 9 A) and more particles.
 
-    >>> fluid = CustomLennardJonesFluid(nx=10, ny=10, nz=10, switch=7.0*units.angstroms, cutoff=9.0*units.angstroms)
+    >>> fluid = CustomLennardJonesFluidMixture(nx=10, ny=10, nz=10, switch=7.0*units.angstroms, cutoff=9.0*units.angstroms)
     >>> system, positions = fluid.system, fluid.positions
     """
 
@@ -1354,6 +1358,7 @@ class CustomLennardJonesFluid(TestSystem):
         epsilon=0.238 * units.kilocalories_per_mole, # argon, 
         cutoff=None, 
         switch=False, 
+        switch_width=0.2*units.angstroms,
         dispersion_correction=True):        
 
         if cutoff is None:
@@ -1364,31 +1369,51 @@ class CustomLennardJonesFluid(TestSystem):
         scaleStepSizeY = 1.0
         scaleStepSizeZ = 1.0
 
+        charge = 0.0 * units.elementary_charge
+
         # Determine total number of atoms.
         natoms = nx * ny * nz
+
+        # determine number of atoms that will be treated by CustomNonbondedForce
+        ncustom = int(natoms/2)
 
         # Create an empty system object.
         system = mm.System()
 
         # Set up periodic nonbonded interactions with a cutoff.
+        nb = mm.NonbondedForce()
+        nb.setNonbondedMethod(mm.NonbondedForce.CutoffPeriodic)    
+        nb.setCutoffDistance(cutoff)
+        nb.setUseDispersionCorrection(dispersion_correction)
+        nb.setUseSwitchingFunction(switch)
+        nb.setSwitchingDistance(cutoff-switch_width)
+
+        # Set up periodic nonbonded interactions with a cutoff.
         if switch:
             energy_expression = "LJ * S;"
             energy_expression += "LJ = 4*epsilon*((sigma/r)^12 - (sigma/r)^6);"
+            energy_expression += "sigma = 0.5*(sigma1+sigma2);"
+            energy_expression += "epsilon = sqrt(epsilon1*epsilon2);"
             energy_expression += "S = (cutoff^2 - r^2)^2 * (cutoff^2 + 2*r^2 - 3*switch^2) / (cutoff^2 - switch^2)^3;"
-            nb = mm.CustomNonbondedForce(energy_expression)
-            nb.addGlobalParameter('switch', switch)
-            nb.addGlobalParameter('cutoff', cutoff)
-            nb.addGlobalParameter('sigma', sigma)
-            nb.addGlobalParameter('epsilon', epsilon)
-            nb.setNonbondedMethod(mm.CustomNonbondedForce.CutoffPeriodic)
-            nb.setCutoffDistance(cutoff)        
+            cnb = mm.CustomNonbondedForce(energy_expression)
+            cnb.addGlobalParameter('switch', switch)
+            cnb.addGlobalParameter('cutoff', cutoff)
+            cnb.addPerParticleParameter('q')
+            cnb.addPerParticleParameter('sigma')
+            cnb.addPerParticleParameter('epsilon')
+            cnb.setNonbondedMethod(mm.CustomNonbondedForce.CutoffPeriodic)
+            cnb.setCutoffDistance(cutoff)        
         else:
             energy_expression = "4*epsilon*((sigma/r)^12 - (sigma/r)^6);"
-            nb = mm.CustomNonbondedForce(energy_expression)
-            nb.addGlobalParameter('sigma', sigma)
-            nb.addGlobalParameter('epsilon', epsilon)
-            nb.setNonbondedMethod(mm.CustomNonbondedForce.CutoffPeriodic)
-            nb.setCutoffDistance(cutoff)        
+            cnb = mm.CustomNonbondedForce(energy_expression)
+            cnb.addGlobalParameter('sigma', sigma)
+            cnb.addGlobalParameter('epsilon', epsilon)
+            cnb.setNonbondedMethod(mm.CustomNonbondedForce.CutoffPeriodic)
+            cnb.setCutoffDistance(cutoff)        
+        # Only add interactions between first atom and rest.
+        #atomset1 = range(0, 1)
+        #atomset2 = range(1, natoms)
+        #cnb.addInteractionGroup(atomset1, atomset2)
             
         positions = units.Quantity(np.zeros([natoms,3],np.float32), units.angstrom)
 
@@ -1401,7 +1426,12 @@ class CustomLennardJonesFluid(TestSystem):
             for jj in range(ny):
                 for kk in range(nz):
                     system.addParticle(mass)
-                    nb.addParticle([])                    
+                    if (atom_index < ncustom):
+                        cnb.addParticle([charge, sigma, epsilon])
+                        nb.addParticle(0.0*charge, sigma, 0.0*epsilon)
+                    else:
+                        cnb.addParticle([0.0*charge, sigma, 0.0*epsilon])
+                        nb.addParticle(charge, sigma, epsilon)
                     x = sigma*scaleStepSizeX*ii
                     y = sigma*scaleStepSizeY*jj
                     z = sigma*scaleStepSizeZ*kk
@@ -1426,8 +1456,9 @@ class CustomLennardJonesFluid(TestSystem):
         c = units.Quantity((0*units.angstrom, 0*units.angstrom, z))
         system.setDefaultPeriodicBoxVectors(a, b, c)
 
-        # Add the nonbonded force.
+        # Add the nonbonded forces.
         system.addForce(nb)
+        system.addForce(cnb)
 
         # Add long-range correction.
         if switch:
@@ -1445,6 +1476,7 @@ class CustomLennardJonesFluid(TestSystem):
             system.addForce(force)
         
         self.system, self.positions = system, positions
+
 
 #=============================================================================================
 # Ideal gas
