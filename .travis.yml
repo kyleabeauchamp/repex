@@ -6,10 +6,9 @@ install:
 
 script:
   - export CC="gcc -std=c89"
-  - source deactivate
+  - source activate $python
   - conda install --yes conda-build
   - conda build tools/conda-recipe
-  - source activate $python
   - conda install $HOME/miniconda/conda-bld/linux-64/repex-dev-*
   - conda list -e
   - nosetests tests-nose/test_testsystems.py
