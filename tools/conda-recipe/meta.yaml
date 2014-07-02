@@ -13,6 +13,7 @@ requirements:
     - mdtraj-dev
     - openmm     
     - netcdf4
+    - mpi4py    
   run:
     - python
     - pandas
@@ -20,6 +21,7 @@ requirements:
     - mdtraj-dev
     - openmm       
     - netcdf4
+    - mpi4py    
 about:
   home: https://github.com/choderalab/repex
   license: GNU Lesser General Public License v2 or later (LGPLv2+)
