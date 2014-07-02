@@ -12,6 +12,7 @@ import tempfile
 import subprocess
 from distutils.ccompiler import new_compiler
 from setuptools import setup, Extension
+import sys
 
 import numpy
 try:
@@ -22,6 +23,15 @@ except ImportError:
     setup_kwargs = {}
     cython_extension = 'c'
 
+
+
+try:
+    # add an optional command line flag --no-install-deps to setup.py
+    # to turn off setuptools automatic downloading of dependencies
+    sys.argv.remove('--no-install-deps')
+    no_install_deps = True
+except ValueError:
+    no_install_deps = False
 
 
 ##########################
