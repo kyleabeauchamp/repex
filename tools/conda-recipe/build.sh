@@ -1,6 +1,7 @@
 #!/bin/bash
 
 cp -r $RECIPE_DIR/../.. $SRC_DIR
+$PYTHON -c "import pymbar"
 $PYTHON setup.py install
 
 # Add more build steps here, if they are necessary.
