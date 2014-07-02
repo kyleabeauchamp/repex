@@ -9,8 +9,9 @@ from repex import resume
 import tempfile
 from mdtraj.testing import eq, skipif
 from repex.constants import kB
+from unittest import skipIf
 
-
+@skipIf(os.environ.get("TRAVIS", None) == 'true', "Skip test power oscillators because it's too slow for Travis")
 def test_power_oscillators():
 
     nc_filename = tempfile.mkdtemp() + "/out.nc"
