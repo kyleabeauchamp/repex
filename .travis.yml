@@ -7,10 +7,9 @@ install:
 script:
   - export CC="gcc -std=c89"
   - source deactivate
-  - conda install --yes conda-build pip
-  - pip install pymbar==2.0.1-beta
-  - conda build tools/conda-recipe
+  - conda install --yes conda-build
   - source activate $python
+  - conda build tools/conda-recipe
   - conda install $HOME/miniconda/conda-bld/linux-64/repex-dev-*
   - conda list -e
   - nosetests tests-nose/test_testsystems.py
