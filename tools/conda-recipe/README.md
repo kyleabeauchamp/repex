@@ -12,6 +12,12 @@ and then saved in the environment variable BINSTAR_TOKEN.
 
 You can set up travis to store an encrypted token via
 
-gem install travis travis encrypt BINSTAR_TOKEN=xx
+gem install travis
+travis encrypt BINSTAR_TOKEN=xx
 
 where xx is the token output by binstar. The final command should print a line (containing 'secure') for inclusion in your .travis.yml file.
+
+On Mac OS X, you will need to use the following (under bash) to install `travis`:
+```bash
+ARCHFLAGS=-Wno-error=unused-command-line-argument-hard-error-in-future gem install --user-install travis
+```
