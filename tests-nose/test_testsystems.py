@@ -25,6 +25,7 @@ def test_properties_all_testsystems():
             for property_name in property_list:
                 method = getattr(testsystem, 'get_' + property_name)
                 logging.info("%32s . %32s : %32s" % (class_name, property_name, str(method(state))))
+                print ("%32s . %32s : %32s" % (class_name, property_name, str(method(state)))) # DEBUG
 
 
 fast_testsystems = ["HarmonicOscillator", "PowerOscillator", "Diatom", "ConstraintCoupledHarmonicOscillator", "HarmonicOscillatorArray", "SodiumChlorideCrystal", "LennardJonesCluster", "LennardJonesFluid", "IdealGas", "AlanineDipeptideVacuum"]
