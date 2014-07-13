@@ -1489,7 +1489,7 @@ class WCAFluid(TestSystem):
     def __init__(self, N=216, density=0.96, mass=39.9*unit.amu, epsilon=120.0*unit.kelvin*kB, sigma=3.4*unit.angstrom):
         """
         Create a Weeks-Chandler-Andersen system.
-        
+
         Parameters:
         -----------
         N : int, optional, default = 216
@@ -1502,14 +1502,14 @@ class WCAFluid(TestSystem):
             WCA well depth.
         sigma : simtk.unit.Quantity
             WCA sigma.
-        
+
         """
         # Create system
         system = mm.System()
 
         # Compute total system volume.
         volume = N / density
-    
+
         # Make system cubic in dimension.
         length = volume**(1.0/3.0)
         # TODO: Can we change this to use tuples or 3x3 array?
@@ -1522,7 +1522,7 @@ class WCAFluid(TestSystem):
         # Add particles to system.
         for n in range(N):
             system.addParticle(mass)
-            
+
         # Create nonbonded force term implementing Kob-Andersen two-component Lennard-Jones interaction.
         energy_expression = '4.0*epsilon*((sigma/r)^12 - (sigma/r)^6) + epsilon'
 
@@ -1535,19 +1535,18 @@ class WCAFluid(TestSystem):
 
         # Add particles
         for n in range(N):
-            force.addParticle([])    
-    
+            force.addParticle([])
+
         # Set periodic boundary conditions with cutoff.
         force.setNonbondedMethod(mm.CustomNonbondedForce.CutoffNonPeriodic)
-        print "setting cutoff distance to %s" % str(r_WCA)
-        force.setCutoffDistance(r_WCA)    
+        force.setCutoffDistance(sigma)
 
         # Add nonbonded force term to the system.
         system.addForce(force)
 
         # Create initial coordinates using random positions.
         coordinates = unit.Quantity(numpy.random.rand(N,3), unit.nanometer) * (length / unit.nanometer)
-       
+
         # Return system and coordinates.
         return [system, coordinates]
 
