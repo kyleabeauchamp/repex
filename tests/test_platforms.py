@@ -191,6 +191,7 @@ if __name__ == "__main__":
     # Make a list of all test system classes.
     testsystem_classes = testsystems.TestSystem.__subclasses__()
     systems = [ (cls.__name__, cls) for cls in testsystem_classes ]
+    print systems
 
     # Compute energy error made on all test systems for other platforms.
     # Make a count of how often set tolerance is exceeded.

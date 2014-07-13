@@ -15,9 +15,11 @@ def test_doctest():
 
 def test_properties_all_testsystems():
     testsystem_classes = testsystems.TestSystem.__subclasses__()
-    print "Testing analytical property computation:"
+    logging.info("Testing analytical property computation:")
     for testsystem_class in testsystem_classes:
         class_name = testsystem_class.__name__
+        logging.info(class_name)
+        print class_name # DEBUG
         testsystem = testsystem_class()
         property_list = testsystem.analytical_properties
         state = ThermodynamicState(temperature=300.0*u.kelvin, pressure=1.0*u.atmosphere, system=testsystem.system)
