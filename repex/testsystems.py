@@ -1778,7 +1778,7 @@ class WaterBox(TestSystem):
 
    """
 
-   def __init__(self, box_edge=2.5*unit.nanometers, cutoff=0.9*unit.nanometers, model='tip3p', switch=True, switch_width=0.5*unit.angstroms, constrained=True, dispersion_correction=True, use_pme=True):
+   def __init__(self, box_edge=2.5*unit.nanometers, cutoff=0.9*unit.nanometers, model='tip3p', switch=True, switch_width=0.5*unit.angstroms, constrained=True, dispersion_correction=True, nonbondedMethod=app.PME):
        """
        Create a water box test system.
        
@@ -1799,9 +1799,9 @@ class WaterBox(TestSystem):
           Sets whether water geometry should be constrained (rigid water implemented via SETTLE) or flexible.
        dispersion_correction : bool, optional, default=True
           Sets whether the long-range dispersion correction should be used.
-       use_pme : bool, optional, default=True
-          If True, PME is used; if False, reaction field is used.
-       
+       nonbondedMethod : simtk.openmm.app nonbonded method, optional, default=app.PME
+          Sets the nonbonded method to use for the water box (one of app.CutoffPeriodic, app.Ewald, app.PME).
+
        Examples
        --------
        
@@ -1812,7 +1812,7 @@ class WaterBox(TestSystem):
        
        Use reaction-field electrostatics instead.
 
-       >>> waterbox = WaterBox(use_pme=False)
+       >>> waterbox = WaterBox(nonbondedMethod=app.CutoffPeriodic)
 
        Control the cutoff.
        
@@ -1868,10 +1868,6 @@ class WaterBox(TestSystem):
        positions = unit.Quantity(numpy.array(newpos / newpos.unit), newpos.unit)
    
        # Create OpenMM System.
-       if use_pme:
-           nonbondedMethod = app.PME
-       else:
-           nonbondedMethod = app.CutoffPeriodic
        system = ff.createSystem(newtop, nonbondedMethod=nonbondedMethod, nonbondedCutoff=cutoff, constraints=None, rigidWater=constrained, removeCMMotion=False)
 
        # Set switching function and dispersion correction.
@@ -2120,8 +2116,8 @@ class AlanineDipeptideImplicit(TestSystem):
 #=============================================================================================
 
 class AlanineDipeptideExplicit(TestSystem):
-    """Alanine dipeptide ff96 in TIP3P explicit solvent with PME electrostatics.
-    
+    """Alanine dipeptide ff96 in TIP3P explicit solvent..
+
     Parameters
     ----------
     constraints : optional, default=simtk.openmm.app.HBonds
@@ -2129,23 +2125,24 @@ class AlanineDipeptideExplicit(TestSystem):
     nonbondedCutoff : Quantity, optional, default=9.0 * unit.angstroms
     use_dispersion_correction : bool, optional, default=True
         If True, the long-range disperson correction will be used.
-    
+    nonbondedMethod : simtk.openmm.app nonbonded method, optional, default=app.PME
+       Sets the nonbonded method to use for the water box (one of app.CutoffPeriodic, app.Ewald, app.PME).
+
     Examples
     --------
-    
+
     >>> alanine = AlanineDipeptideExplicit()
     >>> (system, positions) = alanine.system, alanine.positions
     """
 
-    def __init__(self, constraints=app.HBonds, rigid_water=True, nonbondedCutoff=9.0 * unit.angstroms, use_dispersion_correction=True):
+    def __init__(self, constraints=app.HBonds, rigid_water=True, nonbondedCutoff=9.0 * unit.angstroms, use_dispersion_correction=True, nonbondedMethod=app.PME):
 
         prmtop_filename = get_data_filename("data/alanine-dipeptide-explicit/alanine-dipeptide.prmtop")
-        crd_filename = get_data_filename("data/alanine-dipeptide-explicit/alanine-dipeptide.crd")        
+        crd_filename = get_data_filename("data/alanine-dipeptide-explicit/alanine-dipeptide.crd")
 
         # Initialize system.
-        
         prmtop = app.AmberPrmtopFile(prmtop_filename)
-        system = prmtop.createSystem(constraints=constraints, nonbondedMethod=app.PME, rigidWater=rigid_water, nonbondedCutoff=0.9*unit.nanometer)
+        system = prmtop.createSystem(constraints=constraints, nonbondedMethod=nonbondedMethod, rigidWater=rigid_water, nonbondedCutoff=0.9*unit.nanometer)
 
         # Set dispersion correction use.
         forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
@@ -2158,7 +2155,7 @@ class AlanineDipeptideExplicit(TestSystem):
         # Set box vectors.
         box_vectors = inpcrd.getBoxVectors(asNumpy=True)
         system.setDefaultPeriodicBoxVectors(box_vectors[0], box_vectors[1], box_vectors[2])
-        
+
         self.system, self.positions = system, positions
 
 #=============================================================================================
@@ -2171,29 +2168,29 @@ class LysozymeImplicit(TestSystem):
     Parameters
     ----------
     flexibleConstraints : bool, optional, default=True
-    shake : string, optional, default="h-bonds"
-    
+    constraints : simtk.openmm.app constraints (None, HBonds, HAngles, AllBonds)
+       constraints to be imposed
+
     Examples
     --------
-    
+
     >>> lysozyme = LysozymeImplicit()
     >>> (system, positions) = lysozyme.system, lysozyme.positions
     """
 
-    def __init__(self, flexibleConstraints=True, shake='h-bonds'):
+    def __init__(self, flexibleConstraints=True, constraints=app.HBonds, implicitSolvent=app.OBC1):
 
         prmtop_filename = get_data_filename("data/T4-lysozyme-L99A-implicit/complex.prmtop")
         crd_filename = get_data_filename("data/T4-lysozyme-L99A-implicit/complex.crd")
 
         # Initialize system.
-        
         prmtop = app.AmberPrmtopFile(prmtop_filename)
         system = prmtop.createSystem(implicitSolvent=app.OBC1, constraints=app.HBonds, nonbondedCutoff=None)
 
         # Read positions.
         inpcrd = app.AmberInpcrdFile(crd_filename)
         positions = inpcrd.getPositions(asNumpy=True)
-        
+
         self.system, self.positions = system, positions
 
 
@@ -2205,7 +2202,7 @@ class SrcImplicit(TestSystem):
     >>> src = SrcImplicit()
     >>> system, positions = src.system, src.positions
     """
-    
+
     def __init__(self):
 
         pdb_filename = get_data_filename("data/src-implicit/implicit-refined.pdb")
@@ -2218,7 +2215,7 @@ class SrcImplicit(TestSystem):
 
         # Get positions.
         positions = pdbfile.getPositions()
-        
+
         self.system, self.positions = system, positions
 
 #=============================================================================================
@@ -2228,16 +2225,21 @@ class SrcImplicit(TestSystem):
 class SrcExplicit(TestSystem):
     """Src kinase (AMBER 99sb-ildn) in explicit TIP3P solvent.
 
+    Parameters
+    ----------
+    nonbondedMethod : simtk.openmm.app nonbonded method, optional, default=app.PME
+       Sets the nonbonded method to use for the water box (CutoffPeriodic, app.Ewald, app.PME).
+
     Examples
     --------
     >>> src = SrcExplicit()
     >>> system, positions = src.system, src.positions
 
     """
-    def __init__(self):
+    def __init__(self, nonbondedMethod=app.PME):
 
         system_xml_filename = get_data_filename("data/src-explicit/system.xml")
-        state_xml_filename = get_data_filename("data/src-explicit/state.xml")        
+        state_xml_filename = get_data_filename("data/src-explicit/state.xml")
 
         # Read system.
         infile = open(system_xml_filename, 'r')
@@ -2249,10 +2251,21 @@ class SrcExplicit(TestSystem):
         serialized_state = mm.XmlSerializer.deserialize(infile.read())
         infile.close()
 
+        # Select nonbonded method.
+        forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+        from simtk.openmm import NonbondedForce
+        methodMap = {app.NoCutoff:NonbondedForce.NoCutoff,
+                     app.CutoffNonPeriodic:NonbondedForce.CutoffNonPeriodic,
+                     app.CutoffPeriodic:NonbondedForce.CutoffPeriodic,
+                     app.Ewald:NonbondedForce.Ewald,
+                     app.PME:NonbondedForce.PME}
+        forces['NonbondedForce'].setNonbondedMethod(methodMap[nonbondedMethod])
+
+        # Get positions and set periodic box vectors.
         positions = serialized_state.getPositions()
         box_vectors = serialized_state.getPeriodicBoxVectors()
         system.setDefaultPeriodicBoxVectors(*box_vectors)
-        
+
         self.system, self.positions = system, positions
 
 #=============================================================================================
@@ -2267,25 +2280,25 @@ class MethanolBox(TestSystem):
     flexibleConstraints : bool, optional, default=True
     shake : string, optional, default="h-bonds"
     nonbondedCutoff : Quantity, optional, default=7.0 * unit.angstroms
-    nonbondedMethod : str, optional, default="CutoffPeriodic"
+    nonbondedMethod : simtk.openmm.app nonbonded method, optional, default=app.PME
+       Sets the nonbonded method to use for the water box (one of app.CutoffPeriodic, app.Ewald, app.PME).
 
     Examples
     --------
-    
+
     >>> methanol_box = MethanolBox()
     >>> system, positions = methanol_box.system, methanol_box.positions
     """
 
-    def __init__(self, flexibleConstraints=True, shake='h-bonds', nonbondedCutoff=7.0 * unit.angstroms, nonbondedMethod='CutoffPeriodic'):
+    def __init__(self, flexibleConstraints=True, constraints=app.HBonds, nonbondedCutoff=7.0 * unit.angstroms, nonbondedMethod=app.CutoffPeriodic):
 
         system_name = 'methanol-box'
         prmtop_filename = get_data_filename("data/%s/%s.prmtop" % (system_name, system_name))
         crd_filename = get_data_filename("data/%s/%s.crd" % (system_name, system_name))
-        
+
         # Initialize system.
-        
         prmtop = app.AmberPrmtopFile(prmtop_filename)
-        system = prmtop.createSystem(constraints=app.HBonds, nonbondedMethod=app.PME, rigidWater=True, nonbondedCutoff=0.9*unit.nanometer)
+        system = prmtop.createSystem(constraints=constraints, nonbondedMethod=nonbondedMethod, rigidWater=True, nonbondedCutoff=0.9*unit.nanometer)
 
         # Read positions.
         inpcrd = app.AmberInpcrdFile(crd_filename, loadBoxVectors=True)
@@ -2294,7 +2307,7 @@ class MethanolBox(TestSystem):
         # Set box vectors.
         box_vectors = inpcrd.getBoxVectors(asNumpy=True)
         system.setDefaultPeriodicBoxVectors(box_vectors[0], box_vectors[1], box_vectors[2])
-        
+
         self.system, self.positions = system, positions
 
 #=============================================================================================
@@ -2309,29 +2322,29 @@ class MolecularIdealGas(TestSystem):
     flexibleConstraints : bool, optional, default=True
     shake : string, optional, default=None
     nonbondedCutoff : Quantity, optional, default=7.0 * unit.angstroms
-    nonbondedMethod : str, optional, default="CutoffPeriodic"
+    nonbondedMethod : simtk.openmm.app nonbonded method, optional, default=app.PME
+       Sets the nonbonded method to use for the water box (one of app.CutoffPeriodic, app.Ewald, app.PME).
 
     Examples
     --------
-    
+
     >>> methanol_box = MolecularIdealGas()
     >>> system, positions = methanol_box.system, methanol_box.positions
     """
 
-    def __init__(self, flexibleConstraints=True, shake=None, nonbondedCutoff=7.0 * unit.angstroms, nonbondedMethod='CutoffPeriodic'):
+    def __init__(self, flexibleConstraints=True, shake=None, nonbondedCutoff=7.0 * unit.angstroms, nonbondedMethod=app.CutoffPeriodic):
 
         system_name = 'methanol-box'
         prmtop_filename = get_data_filename("data/%s/%s.prmtop" % (system_name, system_name))
         crd_filename = get_data_filename("data/%s/%s.crd" % (system_name, system_name))
 
         # Initialize system.
-        
         prmtop = app.AmberPrmtopFile(prmtop_filename)
-        reference_system = prmtop.createSystem(constraints=app.HBonds, nonbondedMethod=app.PME, rigidWater=True, nonbondedCutoff=0.9*unit.nanometer)
+        reference_system = prmtop.createSystem(constraints=app.HBonds, nonbondedMethod=nonbondedMethod, rigidWater=True, nonbondedCutoff=0.9*unit.nanometer)
 
         # Make a new system that contains no intermolecular interactions.
         system = mm.System()
-            
+
         # Add atoms.
         for atom_index in range(reference_system.getNumParticles()):
             mass = reference_system.getParticleMass(atom_index)

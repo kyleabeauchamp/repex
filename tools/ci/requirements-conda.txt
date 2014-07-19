@@ -7,7 +7,8 @@ pyyaml
 pip
 nose
 mdtraj-dev
-openmm
+pymbar-dev
+openmm-dev
 jinja2
 netcdf4
 mpi4py
