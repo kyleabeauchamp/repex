@@ -37,7 +37,7 @@ def test_parallel_tempering_all_testsystems():
     n_temps = 3
 
     testsystem_classes = testsystems.TestSystem.__subclasses__()
-    
+
     for testsystem_class in testsystem_classes:
         class_name = testsystem_class.__name__
         if class_name in fast_testsystems:
@@ -45,12 +45,12 @@ def test_parallel_tempering_all_testsystems():
         else:
             logging.info("Skipping replica exchange with testsystem %s." % class_name)
             continue
-            
+
         testsystem = testsystem_class()
-        
+
         system = testsystem.system
         positions = [testsystem.positions] * n_temps
-        
+
         nc_filename = tempfile.mkdtemp() + "/out.nc"
         parameters = {"number_of_iterations":3}
         replica_exchange = ParallelTempering.create(system, positions, nc_filename, T_min=T_min, T_max=T_max, n_temps=n_temps, parameters=parameters)
