@@ -2284,7 +2284,7 @@ class MethanolBox(TestSystem):
     >>> system, positions = methanol_box.system, methanol_box.positions
     """
 
-    def __init__(self, flexibleConstraints=True, constraints=app.HBonds, nonbondedCutoff=7.0 * unit.angstroms, nonbondedMethod=appCutoffPeriodic):
+    def __init__(self, flexibleConstraints=True, constraints=app.HBonds, nonbondedCutoff=7.0 * unit.angstroms, nonbondedMethod=app.CutoffPeriodic):
 
         system_name = 'methanol-box'
         prmtop_filename = get_data_filename("data/%s/%s.prmtop" % (system_name, system_name))
