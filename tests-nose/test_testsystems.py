@@ -31,7 +31,7 @@ def test_properties_all_testsystems():
 
 fast_testsystems = ["HarmonicOscillator", "PowerOscillator", "Diatom", "ConstraintCoupledHarmonicOscillator", "HarmonicOscillatorArray", "SodiumChlorideCrystal", "LennardJonesCluster", "LennardJonesFluid", "IdealGas", "AlanineDipeptideVacuum"]
 
-def test_parallel_tempering_all_testsystems():
+def notest_parallel_tempering_all_testsystems():
     T_min = 1.0 * u.kelvin
     T_max = 10.0 * u.kelvin
     n_temps = 3
