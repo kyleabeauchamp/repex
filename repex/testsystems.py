@@ -2236,7 +2236,7 @@ class SrcExplicit(TestSystem):
     >>> system, positions = src.system, src.positions
 
     """
-    def __init__(self):
+    def __init__(self, nonbondedMethod=app.PME):
 
         system_xml_filename = get_data_filename("data/src-explicit/system.xml")
         state_xml_filename = get_data_filename("data/src-explicit/state.xml")
@@ -2253,7 +2253,13 @@ class SrcExplicit(TestSystem):
 
         # Select nonbonded method.
         forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
-        forces['NonbondedForce'].setNonbondedMethod(nonbondedMethod)
+        from simtk.openmm import NonbondedForce
+        methodMap = {app.NoCutoff:NonbondedForce.NoCutoff,
+                     app.CutoffNonPeriodic:NonbondedForce.CutoffNonPeriodic,
+                     app.CutoffPeriodic:NonbondedForce.CutoffPeriodic,
+                     app.Ewald:NonbondedForce.Ewald,
+                     app.PME:NonbondedForce.PME}
+        forces['NonbondedForce'].setNonbondedMethod(methodMap[nonbondedMethod])
 
         # Get positions and set periodic box vectors.
         positions = serialized_state.getPositions()
