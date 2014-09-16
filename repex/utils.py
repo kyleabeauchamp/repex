@@ -1,3 +1,4 @@
+import platform
 import os
 import collections
 
@@ -12,6 +13,27 @@ from pkg_resources import resource_filename
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def guess_my_device(mpicomm):
+    devices = os.environ["CUDA_VISIBLE_DEVICES"].split(",")
+    hostname = platform.node()
+
+    all_devices = mpicomm.allgather(devices)
+    all_hostnames = mpicomm.allgather(hostname)
+    
+    host_to_rank = dict((key, []) for key in set(all_hostnames))
+    for rank, host in enumerate(all_hostnames):
+        host_to_rank[host].append(rank)
+    
+    rank_to_device = {}
+    
+    for local_hostname, local_devices in host_to_rank.items():
+        n_share = len(local_devices)  # How many MPI threads on my host.
+        for i, device in enumerate(local_devices):
+            rank_to_device[i] = local_devices[i % n_share]
+    
+    return all_devices, all_hostnames, rank_to_device
 
 
 def fix_coordinates(coordinates):
