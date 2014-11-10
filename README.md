@@ -38,6 +38,8 @@ Use of this module requires the following:
 * mpi4py (if MPI support is desired)
   * http://mpi4py.scipy.org/
   * Note that mpi4py must be compiled against the appropriate installed MPI implementation.
+* mdtraj (optional)
+* pandas
 
 ## Authors
 
