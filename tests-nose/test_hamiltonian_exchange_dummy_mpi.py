@@ -2,7 +2,7 @@ import numpy as np
 import simtk.unit as unit
 from repex.thermodynamics import ThermodynamicState
 from repex import hamiltonian_exchange
-from repex import testsystems
+from openmmtools import testsystems
 from repex.utils import permute_energies
 from repex import dummympi
 from repex import resume

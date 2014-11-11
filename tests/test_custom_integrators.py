@@ -46,8 +46,8 @@ import simtk.unit as units
 import simtk.openmm as openmm
 from simtk.openmm import app
 
-from repex import testsystems
-from repex import integrators 
+from openmmtools import testsystems
+from openmmtools import integrators 
 
 #=============================================================================================
 # CONSTANTS

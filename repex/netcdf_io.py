@@ -166,7 +166,7 @@ class NetCDFDatabase(Analyzer):
         ncgrp_stateinfo = self.ncfile.groups['thermodynamic_states']
 
         # Get number of states.
-        n_states = int(ncgrp_stateinfo.variables['n_states'][0])
+        n_states = int(ncgrp_stateinfo.variables['n_states'][:])
 
         # Read state information.
         thermodynamic_states = list()

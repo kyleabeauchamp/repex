@@ -2,7 +2,7 @@ import numpy as np
 import simtk.unit as unit
 from repex.thermodynamics import ThermodynamicState
 from repex import hamiltonian_exchange, replica_exchange, parallel_tempering
-from repex import testsystems
+from openmmtools import testsystems
 from repex import resume
 import tempfile
 from mdtraj.testing import eq, skipif

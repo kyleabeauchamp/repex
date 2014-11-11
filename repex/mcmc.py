@@ -28,7 +28,7 @@ EXAMPLES
 Construct a simple MCMC simulation using Langevin dynamics moves.
 
 >>> # Create a test system
->>> import testsystems
+>>> from openmmtools import testsystems
 >>> test = testsystems.AlanineDipeptideVacuum()
 >>> # Create a thermodynamic state.
 >>> import simtk.unit as u
@@ -84,7 +84,7 @@ import simtk
 import simtk.openmm as mm
 import simtk.unit as u
 
-from repex import integrators
+from openmmtools import integrators
 from repex import thermodynamics
 from repex.timing import Timer
 
@@ -144,7 +144,7 @@ class SamplerState(object):
     Create a sampler state for a system with box vectors.
 
     >>> # Create a test system
-    >>> import testsystems
+    >>> from openmmtools import testsystems
     >>> test = testsystems.LennardJonesFluid()
     >>> # Create a sampler state manually.
     >>> box_vectors = test.system.getDefaultPeriodicBoxVectors()
@@ -153,7 +153,7 @@ class SamplerState(object):
     Create a sampler state for a system without box vectors.
 
     >>> # Create a test system
-    >>> import testsystems
+    >>> from openmmtools import testsystems
     >>> test = testsystems.LennardJonesCluster()
     >>> # Create a sampler state manually.
     >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -205,7 +205,7 @@ class SamplerState(object):
         --------
 
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a Context.
         >>> import simtk.openmm as mm
@@ -267,7 +267,7 @@ class SamplerState(object):
         Create a context for a system with periodic box vectors.
         
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.LennardJonesFluid()
         >>> # Create a sampler state manually.
         >>> box_vectors = test.system.getDefaultPeriodicBoxVectors()
@@ -283,7 +283,7 @@ class SamplerState(object):
         Create a context for a system without periodic box vectors.
 
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.LennardJonesCluster()
         >>> # Create a sampler state manually.
         >>> sampler_state = SamplerState(positions=test.positions, system=test.system)
@@ -351,7 +351,7 @@ class SamplerState(object):
         --------
         
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
         >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -450,7 +450,7 @@ class MCMCSampler(object):
     Markov chain Monte Carlo sampler.
 
     >>> # Create a test system
-    >>> import testsystems
+    >>> from openmmtools import testsystems
     >>> test = testsystems.AlanineDipeptideVacuum()
     >>> # Create a thermodynamic state.
     >>> import simtk.unit as u
@@ -486,7 +486,7 @@ class MCMCSampler(object):
         --------
 
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a thermodynamic state.
         >>> import simtk.unit as u
@@ -536,7 +536,7 @@ class MCMCSampler(object):
         --------
 
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a thermodynamic state.
         >>> import simtk.unit as u
@@ -604,7 +604,7 @@ class LangevinDynamicsMove(MCMCMove):
     --------
 
     >>> # Create a test system
-    >>> import testsystems
+    >>> from openmmtools import testsystems
     >>> test = testsystems.AlanineDipeptideVacuum()
     >>> # Create a sampler state.
     >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -680,7 +680,7 @@ class LangevinDynamicsMove(MCMCMove):
         Alanine dipeptide in vacuum.
 
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
         >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -695,7 +695,7 @@ class LangevinDynamicsMove(MCMCMove):
         Ideal gas.
 
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.IdealGas()
         >>> # Add a MonteCarloBarostat.
         >>> barostat = mm.MonteCarloBarostat(1*u.atmospheres, 298*u.kelvin, 25)

@@ -3,7 +3,7 @@ import numpy as np
 import simtk.openmm as openmm
 import simtk.unit as units
 
-import repex.testsystems
+import openmmtools.testsystems
 
 from pymbar import timeseries
 
