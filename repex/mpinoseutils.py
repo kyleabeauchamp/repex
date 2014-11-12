@@ -99,7 +99,7 @@ class MpiWorkers:
         zctx = zmq.Context()
         socket = zctx.socket(zmq.REQ)
         port = socket.bind_to_random_port("tcp://*")
-        cmd = 'import %s as mod; mod._mpi_worker("tcp://*:%d")' % (__name__, port)
+        cmd = 'import %s as mod; mod._mpi_worker("tcp://localhost:%d")' % (__name__, port)
         env = dict(os.environ)
         env['PYTHONPATH'] = ':'.join(sys.path)
         self.child = subprocess.Popen(['mpiexec', '-np', str(max_nprocs), sys.executable,

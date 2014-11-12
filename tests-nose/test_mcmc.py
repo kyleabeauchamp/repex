@@ -3,7 +3,8 @@ import numpy as np
 import simtk.openmm as openmm
 import simtk.unit as units
 
-import repex.testsystems
+import openmmtools.testsystems
+from openmmtools import testsystems
 
 from pymbar import timeseries
 
@@ -28,7 +29,6 @@ def test_doctest():
     doctest.testmod(mcmc)
 
 def test_minimizer_all_testsystems():
-    from repex import testsystems
     testsystem_classes = testsystems.TestSystem.__subclasses__()
     
     for testsystem_class in testsystem_classes:
@@ -54,7 +54,7 @@ def test_minimizer_all_testsystems():
 def test_mcmc_expectations():
     # Select system:
     for [system_name, move_set] in analytical_testsystems:
-        testsystem_class = getattr(repex.testsystems, system_name)
+        testsystem_class = getattr(openmmtools.testsystems, system_name)
         testsystem = testsystem_class()
         subtest_mcmc_expectation(testsystem, move_set)
 

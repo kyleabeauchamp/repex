@@ -2,7 +2,7 @@ import numpy as np
 import simtk.unit as u
 from repex.thermodynamics import ThermodynamicState
 from repex.parallel_tempering import ParallelTempering
-from repex import testsystems
+from openmmtools import testsystems
 from repex import dummympi
 import tempfile
 from mdtraj.testing import eq, skipif
@@ -10,7 +10,7 @@ import logging
 
 def test_doctest():
     import doctest
-    from repex import testsystems
+    from openmmtools import testsystems
     doctest.testmod(testsystems)
 
 def test_properties_all_testsystems():
