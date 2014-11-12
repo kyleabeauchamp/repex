@@ -11,6 +11,7 @@ requirements:
     - setuptools
     - mdtraj-dev
     - openmm-dev
+    - openmmtools    
     - pymbar-dev
     - netcdf4
     - mpi4py
@@ -20,6 +21,7 @@ requirements:
     - scipy
     - mdtraj-dev
     - openmm-dev
+    - openmmtools
     - pymbar-dev
     - netcdf4
     - mpi4py

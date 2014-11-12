@@ -781,7 +781,7 @@ class GHMCMove(MCMCMove):
     --------
 
     >>> # Create a test system
-    >>> import testsystems
+    >>> from openmmtools import testsystems
     >>> test = testsystems.AlanineDipeptideVacuum()
     >>> # Create a sampler state.
     >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -841,7 +841,7 @@ class GHMCMove(MCMCMove):
         --------
         
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
         >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -881,7 +881,7 @@ class GHMCMove(MCMCMove):
         --------
         
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
         >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -923,7 +923,7 @@ class GHMCMove(MCMCMove):
         --------
         
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
         >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -998,7 +998,7 @@ class HMCMove(MCMCMove):
     --------
 
     >>> # Create a test system
-    >>> import testsystems
+    >>> from openmmtools import testsystems
     >>> test = testsystems.AlanineDipeptideVacuum()
     >>> # Create a sampler state.
     >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -1061,7 +1061,7 @@ class HMCMove(MCMCMove):
         --------
         
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.AlanineDipeptideVacuum()
         >>> # Create a sampler state.
         >>> sampler_state = SamplerState(system=test.system, positions=test.positions)
@@ -1122,7 +1122,7 @@ class MonteCarloBarostatMove(MCMCMove):
     --------
 
     >>> # Create a test system
-    >>> import testsystems
+    >>> from openmmtools import testsystems
     >>> test = testsystems.IdealGas()
     >>> # Create a sampler state.
     >>> sampler_state = SamplerState(system=test.system, positions=test.positions, box_vectors=test.system.getDefaultPeriodicBoxVectors())
@@ -1185,7 +1185,7 @@ class MonteCarloBarostatMove(MCMCMove):
         --------
 
         >>> # Create a test system
-        >>> import testsystems
+        >>> from openmmtools import testsystems
         >>> test = testsystems.LennardJonesFluid()
         >>> # Create a sampler state.
         >>> sampler_state = SamplerState(system=test.system, positions=test.positions, box_vectors=test.system.getDefaultPeriodicBoxVectors())

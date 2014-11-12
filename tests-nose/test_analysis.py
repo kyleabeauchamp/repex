@@ -34,7 +34,9 @@ def test_get_traj():
 
     db = replica_exchange.database
 
-    trj0 = md.load("repex/data/alanine-dipeptide-explicit/alanine-dipeptide.pdb")
+    prmtop_filename = testsystems.get_data_filename("data/alanine-dipeptide-explicit/alanine-dipeptide.prmtop")
+    crd_filename = testsystems.get_data_filename("data/alanine-dipeptide-explicit/alanine-dipeptide.crd")
+    trj0 = md.load_restrt(crd_filename, top=prmtop_filename)
     db.set_traj(trj0)
 
     trj1 = db.get_traj(state_index=0)

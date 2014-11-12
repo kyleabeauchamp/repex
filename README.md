@@ -40,6 +40,7 @@ Use of this module requires the following:
   * Note that mpi4py must be compiled against the appropriate installed MPI implementation.
 * mdtraj (optional)
 * pandas
+* OpenMMTools (https://github.com/choderalab/openmmtools)
 
 ## Authors
 

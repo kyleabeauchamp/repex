@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import simtk.unit as unit
 from repex.thermodynamics import ThermodynamicState

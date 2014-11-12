@@ -12,3 +12,4 @@ openmm-dev
 jinja2
 netcdf4
 mpi4py
+openmmtools
