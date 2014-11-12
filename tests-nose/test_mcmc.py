@@ -4,6 +4,7 @@ import simtk.openmm as openmm
 import simtk.unit as units
 
 import openmmtools.testsystems
+from openmmtools import testsystems
 
 from pymbar import timeseries
 
@@ -28,7 +29,6 @@ def test_doctest():
     doctest.testmod(mcmc)
 
 def test_minimizer_all_testsystems():
-    from repex import testsystems
     testsystem_classes = testsystems.TestSystem.__subclasses__()
     
     for testsystem_class in testsystem_classes:
