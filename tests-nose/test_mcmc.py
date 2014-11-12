@@ -54,7 +54,7 @@ def test_minimizer_all_testsystems():
 def test_mcmc_expectations():
     # Select system:
     for [system_name, move_set] in analytical_testsystems:
-        testsystem_class = getattr(repex.testsystems, system_name)
+        testsystem_class = getattr(openmmtools.testsystems, system_name)
         testsystem = testsystem_class()
         subtest_mcmc_expectation(testsystem, move_set)
 
