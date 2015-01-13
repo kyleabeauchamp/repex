@@ -71,10 +71,10 @@ setup(name='repex',
       classifiers=CLASSIFIERS.splitlines(),
       packages=["repex"],
       package_dir={'mdtraj': 'MDTraj', 'mdtraj.scripts': 'scripts'},
-      install_requires=['numpy'],
+      #install_requires=['numpy'],  # See https://github.com/pydata/patsy/issues/5 for why to avoid doing this.
       zip_safe=False,
       scripts=[],
       ext_modules=extensions,
-      package_data={'repex': ['data/*/*']},  # Install all data directories of the form testsystems/data/X/
+      package_data={'repex': ['tests-nose/*']},
       **setup_kwargs
       )

@@ -302,7 +302,12 @@ class NetCDFDatabase(Analyzer):
         
         option_ncvar = self.ncfile.groups['options'].variables[option_name]
         # Get option value.
-        option_value = option_ncvar[0]
+        
+        try:
+            option_value = option_ncvar[0]  # If the option is a np.array(['string']), this turns it into a scalar.
+        except IndexError:
+            option_value = option_ncvar[:]  # If the option is a float or int, this works and gives a scalar
+
         # Cast to Python type.
         type_name = getattr(option_ncvar, 'type')
         

@@ -1,6 +1,6 @@
 package:
   name: repex
-  version: !!str dev
+  version: !!str 0.1.X
 
 requirements:
   build:
@@ -9,22 +9,32 @@ requirements:
     - numpy
     - scipy
     - setuptools
-    - mdtraj-dev
-    - openmm-dev
+    - mdtraj
+    - openmm
     - openmmtools    
-    - pymbar-dev
+    - pymbar
     - netcdf4
     - mpi4py
   run:
     - python
     - pandas
     - scipy
-    - mdtraj-dev
-    - openmm-dev
+    - mdtraj
+    - openmm
     - openmmtools
-    - pymbar-dev
+    - pymbar
     - netcdf4
     - mpi4py
+    - pyzmq    
+
+test:
+  requires:
+    - nose
+    - pyzmq    
+  imports:
+    - repex
+  commands:
+    - nosetests repex --nocapture --verbosity=2 --with-doctest --logging-level=WARN
 
 about:
   home: https://github.com/choderalab/repex
