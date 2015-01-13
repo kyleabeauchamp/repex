@@ -61,7 +61,7 @@ class ThermodynamicState(object):
 
     Specify an NVT state for a water box at 298 K.
 
-    >>> from repex import testsystems
+    >>> from openmmtools import testsystems
     >>> system_container = testsystems.WaterBox()        
     >>> (system, positions) = system_container.system, system_container.positions
     >>> state = ThermodynamicState(system=system, temperature=298.0*units.kelvin)
@@ -212,7 +212,7 @@ class ThermodynamicState(object):
 
         Compute the reduced potential of a Lennard-Jones cluster at 100 K.
         
-        >>> from repex import testsystems
+        >>> from openmmtools import testsystems
         >>> system_container = testsystems.LennardJonesCluster()
         >>> (system, positions) = system_container.system, system_container.positions
         >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin)
@@ -326,7 +326,7 @@ class ThermodynamicState(object):
         Compute the reduced potential of a Lennard-Jones cluster at multiple configurations at 100 K.
         
         >>> import simtk.unit as units
-        >>> from repex import testsystems
+        >>> from openmmtools import testsystems
         >>> system_container = testsystems.LennardJonesCluster()
         >>> (system, positions) = system_container.system, system_container.positions
         >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin)
@@ -421,7 +421,7 @@ class ThermodynamicState(object):
 
         Create NVT and NPT states.
         
-        >>> from repex import testsystems
+        >>> from openmmtools import testsystems
         >>> system_container = testsystems.LennardJonesCluster()
         >>> (system, positions) = system_container.system, system_container.positions
         >>> nvt_state = ThermodynamicState(system=system, temperature=100.0*units.kelvin)
@@ -460,7 +460,7 @@ class ThermodynamicState(object):
         Create an NVT state.
         
         >>> import simtk.unit as units
-        >>> from repex import testsystems
+        >>> from openmmtools import testsystems
         >>> system_container = testsystems.LennardJonesCluster()
         >>> (system, positions) = system_container.system, system_container.positions
         >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin)
@@ -504,7 +504,7 @@ def volume(box_vectors):
     
     Compute the volume of a Lennard-Jones fluid at 100 K and 1 atm.
 
-    >>> from repex import testsystems
+    >>> from openmmtools import testsystems
     >>> system_container = testsystems.LennardJonesFluid()        
     >>> (system, positions) = system_container.system, system_container.positions
     >>> state = ThermodynamicState(system=system, temperature=100.0*units.kelvin, pressure=1.0*units.atmosphere)
