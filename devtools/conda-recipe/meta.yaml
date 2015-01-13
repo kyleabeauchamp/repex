@@ -1,6 +1,6 @@
 package:
   name: repex
-  version: !!str dev
+  version: !!str 0.1.X
 
 requirements:
   build:
@@ -25,6 +25,14 @@ requirements:
     - pymbar
     - netcdf4
     - mpi4py
+
+test:
+  requires:
+    - nose
+  imports:
+    - repex
+  commands:
+    - nosetests repex --nocapture --verbosity=2 --with-doctest --logging-level=WARN
 
 about:
   home: https://github.com/choderalab/repex

@@ -75,6 +75,6 @@ setup(name='repex',
       zip_safe=False,
       scripts=[],
       ext_modules=extensions,
-      package_data={'repex': ['data/*/*']},  # Install all data directories of the form testsystems/data/X/
+      package_data={'repex': ['tests-nose/*']},
       **setup_kwargs
       )
