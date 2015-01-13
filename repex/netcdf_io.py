@@ -302,7 +302,7 @@ class NetCDFDatabase(Analyzer):
         
         option_ncvar = self.ncfile.groups['options'].variables[option_name]
         # Get option value.
-        option_value = option_ncvar[0]
+        option_value = option_ncvar  # [0]  # Fixes IndexError
         # Cast to Python type.
         type_name = getattr(option_ncvar, 'type')
         
