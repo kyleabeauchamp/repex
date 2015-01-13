@@ -25,6 +25,7 @@ requirements:
     - pymbar
     - netcdf4
     - mpi4py
+    - pyzmq    
 
 test:
   requires:
