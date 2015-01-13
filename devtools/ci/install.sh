@@ -16,4 +16,4 @@ sudo apt-get install -qq -y g++ gfortran csh g++-multilib gcc-multilib openbabel
 conda update --yes conda
 conda config --add channels http://conda.binstar.org/omnia
 source activate $python
-conda install --yes conda-build
+conda install --yes conda-build jinja2
