@@ -9,20 +9,20 @@ requirements:
     - numpy
     - scipy
     - setuptools
-    - mdtraj-dev
-    - openmm-dev
+    - mdtraj
+    - openmm
     - openmmtools    
-    - pymbar-dev
+    - pymbar
     - netcdf4
     - mpi4py
   run:
     - python
     - pandas
     - scipy
-    - mdtraj-dev
-    - openmm-dev
+    - mdtraj
+    - openmm
     - openmmtools
-    - pymbar-dev
+    - pymbar
     - netcdf4
     - mpi4py
 

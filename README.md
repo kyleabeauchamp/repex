@@ -10,8 +10,6 @@ This package provides a general facility for running replica-exchange simulation
 derived classes for special cases such as parallel tempering (in which the states differ only
 in temperature) and Hamiltonian exchange (in which the state differ only by potential function).
 
-This package also provides a number of utilities and tests that are required for Yank and other OpenMM-based projects.
-
 Simulations utilize a generic Markov chain Monte Carlo (MCMC) framework that makes it easy to mix Monte Carlo and molecular dynamics.
 
 Provided classes include:
