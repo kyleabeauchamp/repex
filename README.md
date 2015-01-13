@@ -40,16 +40,15 @@ Use of this module requires the following:
 * pandas
 * OpenMMTools (https://github.com/choderalab/openmmtools)
 
-## Authors
+Authors
+-------
+
 
 * John D. Chodera <jchodera@gmail.com>
 * Kyle A. Beauchamp <kyleabeauchamp@gmail.com>
 
-## Copyright
 
-Written by John D. Chodera <jchodera@gmail.com> and Kyle A. Beauchamp <kyleabeauchamp@gmail.com> wwhile at the University of California Berkeley and the Memorial Sloan-Kettering Cancer Center.
+License
+-------
 
-## License
-
-This code is licensed under the GNU Lesser General Public License (LGPL).
-
+All code in this repository is released under the GNU Lesser General Public License.  See LICENSE for details.  Written by the authors at the University of California Berkeley and the Memorial Sloan-Kettering Cancer Center.
