@@ -25,7 +25,8 @@ requirements:
     - pymbar
     - netcdf4
     - mpi4py
-    - pyzmq    
+    - pyzmq 
+    - cluster_utils
 
 test:
   requires:
