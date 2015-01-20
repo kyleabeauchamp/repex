@@ -25,7 +25,8 @@ requirements:
     - pymbar
     - netcdf4
     - mpi4py
-    - pyzmq    
+    - pyzmq 
+    - cluster_utils
 
 test:
   requires:
@@ -34,7 +35,7 @@ test:
   imports:
     - repex
   commands:
-    - nosetests repex --nocapture --verbosity=2 --with-doctest --logging-level=WARN
+    - nosetests repex --nocapture --verbosity=2 --with-doctest --logging-level=WARN  -a '!slow'
 
 about:
   home: https://github.com/choderalab/repex
