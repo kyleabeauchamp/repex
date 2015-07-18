@@ -775,7 +775,7 @@ class ReplicaExchange(object):
         logger.info("\n%-24s %16s\n%s" % ("reduced potential (kT)", "current state", U.to_string()))
 
     @classmethod
-    def create(cls, thermodynamic_states, coordinates, filename, mpicomm=None, platform=None, parameters={}):
+    def create(cls, thermodynamic_states, coordinates, filename, sampler_states=None, mpicomm=None, platform=None, parameters={}):
         """Create a new ReplicaExchange simulation.
         
         Parameters
@@ -802,7 +802,8 @@ class ReplicaExchange(object):
         else:
             database = None
 
-        sampler_states = [SamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]        
+        if sampler_states is None:
+            sampler_states = [SamplerState(thermodynamic_states[k].system, coordinates[k], platform=platform) for k in range(len(thermodynamic_states))]        
         
         repex = cls(thermodynamic_states, sampler_states, database, mpicomm=mpicomm, platform=platform, parameters=parameters)
         repex._run_iteration_zero()
